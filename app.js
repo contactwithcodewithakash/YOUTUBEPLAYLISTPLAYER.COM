@@ -119,7 +119,7 @@ function onPlayerStateChange(event) {
 function onPlayerError(event) {
     console.error("YouTube Player Error", event.data);
     consecutiveErrors++;
-    
+
     if (consecutiveErrors >= 3) {
         showError("Too many playback errors. Music videos might be restricted from playing directly from local files. Try hosting the folder using a local server.");
         state.isPlaying = false;
@@ -221,7 +221,14 @@ function extractPlaylistId(url) {
 async function fetchPlaylistInfo(playlistId) {
     const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${playlistId}&key=${YOUTUBE_API_KEY}`;
     const response = await fetch(url);
-    if (!response.ok) throw new Error('API Error fetching playlist details.');
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        let errMsg = errData.error?.message || response.statusText;
+        if (response.status === 403 && errMsg.includes('referer')) {
+            errMsg += " -> Fix: Go to Google Cloud Console > Credentials, and add this website's URL (and localhost for local testing) to your API key's Website Restrictions.";
+        }
+        throw new Error(`API Error: ${errMsg}`);
+    }
     return response.json();
 }
 
@@ -232,7 +239,14 @@ async function fetchAllPlaylistItems(playlistId) {
     do {
         const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${YOUTUBE_API_KEY}${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`;
         const response = await fetch(url);
-        if (!response.ok) throw new Error('API Error fetching playlist items.');
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            let errMsg = errData.error?.message || response.statusText;
+            if (response.status === 403 && errMsg.includes('referer')) {
+                errMsg += " -> Fix: Update your API key's Website Restrictions in Google Cloud Console.";
+            }
+            throw new Error(`API Error: ${errMsg}`);
+        }
 
         const data = await response.json();
         items = items.concat(data.items);
