@@ -2,7 +2,7 @@
  * YouTube Playlist Music Player Logic
  * IMPORTANT: You must provide a valid YouTube Data API v3 key below.
  */
-const YOUTUBE_API_KEY = 'AIzaSyDzeVeBk1KP7W7SrzqaeEp_BFDgKQrZnls';
+const YOUTUBE_API_KEY = 'AIzaSyDFBQ4-uJ6ORdJb72BwcFtQiPRTblA6Tng';
 
 // --- State Management ---
 const state = {
