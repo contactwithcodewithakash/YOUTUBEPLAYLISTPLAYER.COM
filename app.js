@@ -30,6 +30,7 @@ const DOM = {
     title: document.getElementById('playlist-title'),
     owner: document.getElementById('playlist-owner'),
     count: document.getElementById('playlist-count'),
+    syncBtn: document.getElementById('sync-playlist-btn'),
     playAllBtn: document.getElementById('play-all-btn'),
 
     // Track List
@@ -560,6 +561,76 @@ function formatTime(seconds) {
 DOM.playAllBtn.addEventListener('click', () => {
     if (state.tracks.length > 0) {
         playSong(0);
+    }
+});
+
+DOM.syncBtn.addEventListener('click', async () => {
+    if (!state.playlistId) return;
+    
+    try {
+        const icon = DOM.syncBtn.querySelector('i');
+        icon.classList.add('fa-spin');
+        
+        const info = await fetchPlaylistInfo(state.playlistId);
+        if (!info || info.items.length === 0) {
+            throw new Error('Playlist not found or is private.');
+        }
+
+        const items = await fetchAllPlaylistItems(state.playlistId);
+
+        // Filter out deleted/private videos
+        const validTracks = items.filter(item => {
+            const title = item.snippet.title;
+            return title !== 'Private video' && title !== 'Deleted video';
+        }).map(item => ({
+            id: item.id,
+            videoId: item.snippet.resourceId.videoId,
+            title: item.snippet.title,
+            channelTitle: item.snippet.videoOwnerChannelTitle || '',
+            thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || 'https://via.placeholder.com/120x90'
+        }));
+
+        if (validTracks.length === 0) {
+            throw new Error('Playlist has no playable tracks.');
+        }
+
+        // Update State but preserve current track if possible
+        let currentVideoId = null;
+        if (state.tracks.length > 0 && state.currentIndex >= 0 && state.currentIndex < state.tracks.length) {
+            currentVideoId = state.tracks[state.currentIndex].videoId;
+        }
+
+        state.playlistInfo = info.items[0].snippet;
+        state.originalTracks = [...validTracks];
+
+        if (state.isShuffle) {
+            state.tracks = shuffleArray([...validTracks]);
+        } else {
+            state.tracks = [...validTracks];
+        }
+
+        // Try to maintain currently playing video index
+        if (currentVideoId) {
+            const newIndex = state.tracks.findIndex(t => t.videoId === currentVideoId);
+            if (newIndex !== -1) {
+                state.currentIndex = newIndex;
+            } else {
+                state.currentIndex = 0; // fallback if current song was removed
+            }
+        }
+
+        // Update UI
+        renderPlaylistInfo();
+        renderTrackList();
+        updatePlayerUI();
+        saveState();
+
+        icon.classList.remove('fa-spin');
+        
+    } catch (err) {
+        console.error(err);
+        showError(err.message || 'Failed to sync playlist.');
+        DOM.syncBtn.querySelector('i').classList.remove('fa-spin');
     }
 });
 

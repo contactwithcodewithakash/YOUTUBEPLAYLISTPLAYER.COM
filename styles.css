@@ -205,6 +205,26 @@ button:hover {
     color: var(--bg-base);
 }
 
+.sync-btn {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 500px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all var(--transition-fast);
+}
+
+.sync-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
 /* Playlist Info */
 .playlist-info {
     padding: 0 24px 24px;
