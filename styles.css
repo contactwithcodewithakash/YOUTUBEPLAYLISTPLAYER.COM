@@ -42,7 +42,7 @@ body {
     background-color: var(--bg-base);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
-    overflow: hidden; /* Stop full body scroll */
+    overflow: hidden; /* Stop full body scroll on desktop, overridden on mobile */
 }
 
 /* Layout */
@@ -558,10 +558,27 @@ input[type=range]:hover::-webkit-slider-thumb {
 
 /* Responsive */
 @media (max-width: 1024px) {
+    body {
+        overflow-y: auto; /* Native scroll for mobile */
+    }
+    
+    .app-container {
+        height: auto;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding-bottom: 90px; /* Space for the fixed player */
+    }
+    
+    .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+    
     .app-main {
         flex-direction: column;
-        overflow-y: auto;
-        overflow-x: hidden;
+        overflow: visible;
+        height: auto;
     }
     
     .left-panel {
@@ -603,7 +620,16 @@ input[type=range]:hover::-webkit-slider-thumb {
         overflow-y: visible;
         height: auto;
         flex: none;
-        padding-bottom: 24px;
+        padding-bottom: 16px;
+    }
+    
+    .app-player {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        z-index: 100;
+        box-shadow: 0 -4px 24px rgba(0,0,0,0.8);
     }
 }
 
@@ -624,15 +650,19 @@ input[type=range]:hover::-webkit-slider-thumb {
         margin: 0 auto 16px;
     }
 
+    .app-container {
+        padding-bottom: 120px; /* More space for stacked player controls */
+    }
+
     .app-player {
         height: auto;
-        padding: 16px 8px;
+        padding: 12px 8px;
         flex-direction: column;
     }
 
     .player-content {
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
         width: 100%;
     }
 
