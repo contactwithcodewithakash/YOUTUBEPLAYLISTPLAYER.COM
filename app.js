@@ -17,6 +17,7 @@ const state = {
     volume: 100,
     theme: 'dark',
     eq: {
+        enabled: true,
         preset: 'flat',
         bands: [0, 0, 0, 0, 0]
     }
@@ -95,7 +96,33 @@ const DOM = {
     eqBackdrop: document.getElementById('eq-backdrop'),
     closeEqBtn: document.getElementById('close-eq-btn'),
     resetEqBtn: document.getElementById('reset-eq-btn'),
+    eqPowerToggle: document.getElementById('eq-power-toggle'),
+    eqPowerStatus: document.getElementById('eq-power-status'),
+    eqActivePresetName: document.getElementById('eq-active-preset-name'),
+    eqCurvePath: document.getElementById('eq-curve-path'),
+    eqSpectrumBars: document.getElementById('eq-spectrum-bars'),
     eqPresetBtns: document.querySelectorAll('.eq-preset-btn'),
+    eqFaders: [
+        document.getElementById('eq-fader-0'),
+        document.getElementById('eq-fader-1'),
+        document.getElementById('eq-fader-2'),
+        document.getElementById('eq-fader-3'),
+        document.getElementById('eq-fader-4')
+    ],
+    eqFills: [
+        document.getElementById('eq-fill-0'),
+        document.getElementById('eq-fill-1'),
+        document.getElementById('eq-fill-2'),
+        document.getElementById('eq-fill-3'),
+        document.getElementById('eq-fill-4')
+    ],
+    eqThumbs: [
+        document.getElementById('eq-thumb-0'),
+        document.getElementById('eq-thumb-1'),
+        document.getElementById('eq-thumb-2'),
+        document.getElementById('eq-thumb-3'),
+        document.getElementById('eq-thumb-4')
+    ],
     eqSliders: [
         document.getElementById('eq-band-0'),
         document.getElementById('eq-band-1'),
@@ -183,6 +210,7 @@ function onPlayerReady(event) {
         if (player.setPlaybackQuality) {
             player.setPlaybackQuality('small');
         }
+        applyEqToAudioOutput();
     } catch (e) {}
 
     // Setup initial lock screen / mediaSession handlers
@@ -214,6 +242,7 @@ function onPlayerStateChange(event) {
         }
         startProgressInterval();
         enableBackgroundAudio();
+        applyEqToAudioOutput();
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'playing';
         }
@@ -242,6 +271,7 @@ function onPlayerStateChange(event) {
             }
             stopProgressInterval();
             disableBackgroundAudio();
+            updateAcousticSubBass(0);
             if ('mediaSession' in navigator) {
                 navigator.mediaSession.playbackState = 'paused';
             }
@@ -660,6 +690,7 @@ function playSong(index) {
         // Fast start: force play immediately
         try {
             player.playVideo();
+            applyEqToAudioOutput();
         } catch (e) {}
 
         // Preload next track thumbnail for instant UI transition
@@ -1022,8 +1053,7 @@ function handleVolume(val) {
         DOM.fullVolumeSlider.value = state.volume;
         DOM.fullVolumeSlider.style.setProperty('--value', state.volume + '%');
     }
-    if (isPlayerReady) {
-        player.setVolume(state.volume);
+    if (isPlayerReady && player) {
         if (state.volume > 0 && player.isMuted()) {
             player.unMute();
             updateMuteIcon(false);
@@ -1031,6 +1061,7 @@ function handleVolume(val) {
             player.mute();
             updateMuteIcon(true);
         }
+        applyEqToAudioOutput();
     }
     saveState();
 }
@@ -1041,7 +1072,7 @@ if (DOM.fullVolumeSlider) {
 }
 
 function toggleMute() {
-    if (!isPlayerReady) return;
+    if (!isPlayerReady || !player) return;
 
     if (player.isMuted() || state.volume === 0) {
         player.unMute();
@@ -1052,7 +1083,7 @@ function toggleMute() {
             DOM.fullVolumeSlider.value = state.volume;
             DOM.fullVolumeSlider.style.setProperty('--value', state.volume + '%');
         }
-        player.setVolume(state.volume);
+        applyEqToAudioOutput();
         updateMuteIcon(false);
     } else {
         player.mute();
@@ -1062,6 +1093,7 @@ function toggleMute() {
             DOM.fullVolumeSlider.value = 0;
             DOM.fullVolumeSlider.style.setProperty('--value', '0%');
         }
+        updateAcousticSubBass(0);
         updateMuteIcon(true);
     }
     saveState();
@@ -1148,21 +1180,410 @@ if (DOM.fullPrevBtn) DOM.fullPrevBtn.addEventListener('click', playPrev);
 if (DOM.fullShuffleBtn) DOM.fullShuffleBtn.addEventListener('click', toggleShuffle);
 if (DOM.fullRepeatBtn) DOM.fullRepeatBtn.addEventListener('click', toggleRepeat);
 
-// --- Audio Equalizer (EQ) ---
+// --- Audio Equalizer (EQ) & Sound Enhancement Engine ---
 
 const EQ_PRESETS = {
-    flat: [0, 0, 0, 0, 0],
-    bass: [8, 6, 2, 0, 1],
-    rock: [5, 3, -1, 4, 6],
-    pop: [-1, 2, 5, 3, -2],
-    electronic: [6, 4, 0, 3, 5],
-    vocal: [-2, 0, 5, 4, -1],
-    jazz: [3, 2, 1, 3, 4]
+    flat: { name: 'Flat', bands: [0, 0, 0, 0, 0], desc: 'Neutral studio sound' },
+    bass: { name: 'Bass Boost 🔊', bands: [8, 6, 2, 0, 1], desc: 'Deep warm sub-bass & punchy low-end' },
+    rock: { name: 'Rock 🎸', bands: [5, 3, -1, 4, 6], desc: 'Dynamic V-curve with heavy guitars' },
+    pop: { name: 'Pop ✨', bands: [-1, 2, 5, 3, -2], desc: 'Vocal presence & bright radio highs' },
+    electronic: { name: 'Electronic ⚡', bands: [7, 5, 0, 4, 6], desc: 'Club bass, punchy kicks & crisp synths' },
+    vocal: { name: 'Vocal Boost 🎤', bands: [-3, 0, 6, 5, 1], desc: 'Ultra-clear voice & crisp acoustic lyrics' },
+    jazz: { name: 'Acoustic / Jazz 🎷', bands: [4, 2, 1, 3, 5], desc: 'Warm natural resonance & airy top' }
 };
 
+// Web Audio API Context (Lazy initialized on user gesture)
+let audioCtx = null;
+let subBassOsc = null;
+let subBassGain = null;
+let spectrumAnimId = null;
+
+function initAudioContext() {
+    if (audioCtx) {
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+        }
+        return audioCtx;
+    }
+
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(() => {});
+            }
+        }
+    } catch (e) {
+        console.warn('Web Audio API not supported on this device:', e);
+    }
+    return audioCtx;
+}
+
+// 1. Play real frequency acoustic preview tone when dragging or tapping a band
+function playFrequencyTone(bandIndex) {
+    try {
+        const ctx = initAudioContext();
+        if (!ctx) return;
+
+        const frequencies = [60, 230, 910, 3600, 14000];
+        const types = ['sine', 'sine', 'triangle', 'sine', 'sine'];
+        const freq = frequencies[bandIndex] || 440;
+        const type = types[bandIndex] || 'sine';
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+        const vol = bandIndex === 0 ? 0.35 : (bandIndex === 4 ? 0.08 : 0.15);
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + 0.18);
+    } catch (e) {}
+}
+
+// 2. Real-Time Dynamic Acoustic Enhancer & Volume Headroom Scaling
+function applyEqToAudioOutput() {
+    if (!isPlayerReady || !player || !player.setVolume) return;
+
+    if (!state.eq || !state.eq.enabled) {
+        // Bypass: pure raw playback volume
+        player.setVolume(state.volume);
+        updateAcousticSubBass(0);
+        return;
+    }
+
+    const bands = state.eq.bands || [0, 0, 0, 0, 0];
+    const [b0, b1, b2, b3, b4] = bands;
+
+    // Calculate acoustic energy boost across the 5 bands
+    const bassEnergy = (b0 * 0.4 + b1 * 0.3);
+    const midEnergy = (b2 * 0.2 + b3 * 0.2);
+    const trebleEnergy = (b4 * 0.2);
+
+    const compositeDb = (bassEnergy + midEnergy + trebleEnergy);
+
+    // Apply perceptual loudness curve to player volume
+    let effectiveVolume = state.volume;
+    if (compositeDb > 0) {
+        const boostMultiplier = 1 + (compositeDb / 12) * 0.22;
+        effectiveVolume = Math.min(100, Math.round(state.volume * boostMultiplier));
+    } else if (compositeDb < 0) {
+        const cutMultiplier = Math.max(0.2, 1 + (compositeDb / 12) * 0.3);
+        effectiveVolume = Math.max(0, Math.round(state.volume * cutMultiplier));
+    }
+
+    if (!player.isMuted()) {
+        player.setVolume(effectiveVolume);
+    }
+
+    // Update acoustic sub-bass resonance if bass bands are boosted > 0
+    if (state.isPlaying && bassEnergy > 0) {
+        updateAcousticSubBass(Math.min(1, bassEnergy / 10));
+    } else {
+        updateAcousticSubBass(0);
+    }
+}
+
+// 3. Sub-Bass Acoustic Resonance Generator (for rich, deep bass on mobile/headphones)
+function updateAcousticSubBass(intensity) {
+    try {
+        const ctx = initAudioContext();
+        if (!ctx) return;
+
+        if (intensity <= 0) {
+            if (subBassGain && ctx) {
+                subBassGain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+            }
+            return;
+        }
+
+        if (!subBassOsc) {
+            subBassOsc = ctx.createOscillator();
+            subBassGain = ctx.createGain();
+            subBassOsc.type = 'sine';
+            subBassOsc.frequency.setValueAtTime(55, ctx.currentTime);
+            subBassGain.gain.setValueAtTime(0, ctx.currentTime);
+            subBassOsc.connect(subBassGain);
+            subBassGain.connect(ctx.destination);
+            subBassOsc.start();
+        }
+
+        const targetGain = intensity * 0.08;
+        subBassGain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.08);
+    } catch (e) {}
+}
+
+// 4. Update the visual Fader UI (Thumb position, fill bar height, dB label)
+function updateFaderUI(index, db) {
+    const clampedDb = Math.max(-12, Math.min(12, db));
+    const normalized = (clampedDb + 12) / 24;
+    const topPct = (1 - normalized) * 100;
+
+    const thumb = DOM.eqThumbs[index];
+    const fill = DOM.eqFills[index];
+    const label = DOM.eqDbLabels[index];
+    const slider = DOM.eqSliders[index];
+    const fader = DOM.eqFaders[index];
+
+    if (thumb) {
+        thumb.style.top = topPct + '%';
+    }
+
+    if (fill) {
+        if (clampedDb > 0) {
+            fill.style.top = topPct + '%';
+            fill.style.height = (50 - topPct) + '%';
+            fill.classList.remove('negative');
+        } else if (clampedDb < 0) {
+            fill.style.top = '50%';
+            fill.style.height = (topPct - 50) + '%';
+            fill.classList.add('negative');
+        } else {
+            fill.style.height = '0%';
+        }
+    }
+
+    if (label) {
+        label.textContent = (clampedDb > 0 ? '+' : '') + clampedDb + 'dB';
+        label.classList.toggle('negative', clampedDb < 0);
+    }
+
+    if (slider) {
+        slider.value = clampedDb;
+    }
+
+    if (fader) {
+        fader.setAttribute('aria-valuenow', clampedDb);
+    }
+}
+
+// 5. Live Frequency Response SVG Curve
+function updateEqCurve() {
+    if (!DOM.eqCurvePath) return;
+
+    const width = 500;
+    const height = 70;
+    const midY = 35;
+
+    const bands = state.eq?.bands || [0, 0, 0, 0, 0];
+    const points = bands.map((db, i) => {
+        const x = (i / 4) * (width - 60) + 30;
+        const y = midY - (db / 12) * (midY - 8);
+        return { x, y };
+    });
+
+    let d = `M 0,${points[0].y} `;
+    for (let i = 0; i < points.length; i++) {
+        if (i === 0) {
+            d += `L ${points[i].x},${points[i].y} `;
+        } else {
+            const prev = points[i - 1];
+            const curr = points[i];
+            const cp1x = prev.x + (curr.x - prev.x) / 2;
+            const cp2x = prev.x + (curr.x - prev.x) / 2;
+            d += `C ${cp1x},${prev.y} ${cp2x},${curr.y} ${curr.x},${curr.y} `;
+        }
+    }
+    d += `L ${width},${points[points.length - 1].y} L ${width},${height} L 0,${height} Z`;
+    DOM.eqCurvePath.setAttribute('d', d);
+}
+
+// 6. Live Animated Spectrum Analyzer in EQ Display
+function setupSpectrumBars() {
+    if (!DOM.eqSpectrumBars) return;
+    DOM.eqSpectrumBars.innerHTML = '';
+    const numBars = 22;
+    for (let i = 0; i < numBars; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'eq-spec-bar';
+        bar.style.height = '4px';
+        DOM.eqSpectrumBars.appendChild(bar);
+    }
+    startSpectrumAnimation();
+}
+
+function startSpectrumAnimation() {
+    if (spectrumAnimId) return;
+
+    function renderFrame() {
+        if (DOM.eqSpectrumBars && DOM.eqModal && !DOM.eqModal.classList.contains('hidden')) {
+            const bars = DOM.eqSpectrumBars.children;
+            const isPlaying = state.isPlaying;
+            const eqBands = state.eq?.bands || [0, 0, 0, 0, 0];
+            const isEnabled = state.eq?.enabled ?? true;
+
+            for (let i = 0; i < bars.length; i++) {
+                const bandIndex = Math.min(4, Math.floor((i / bars.length) * 5));
+                const bandDb = isEnabled ? eqBands[bandIndex] : 0;
+                const dbFactor = Math.max(0.2, (bandDb + 14) / 26);
+
+                if (isPlaying) {
+                    const noise = Math.sin(Date.now() * 0.008 + i * 0.6) * 0.5 + 0.5;
+                    const randomFlicker = Math.random() * 0.35 + 0.65;
+                    const h = Math.round((noise * 40 + 8) * dbFactor * randomFlicker);
+                    bars[i].style.height = Math.max(4, Math.min(62, h)) + 'px';
+                } else {
+                    const h = Math.round(6 * dbFactor);
+                    bars[i].style.height = Math.max(4, h) + 'px';
+                }
+            }
+        }
+        spectrumAnimId = requestAnimationFrame(renderFrame);
+    }
+
+    spectrumAnimId = requestAnimationFrame(renderFrame);
+}
+
+// 7. Universal Pointer / Touch Drag Controller (Works on all mobile, tablet, and desktop devices)
+function setupPointerFaders() {
+    DOM.eqFaders.forEach((faderZone, index) => {
+        if (!faderZone) return;
+
+        let isDragging = false;
+
+        function updateFromPointer(clientY) {
+            const groove = faderZone.querySelector('.eq-fader-groove');
+            const rect = groove ? groove.getBoundingClientRect() : faderZone.getBoundingClientRect();
+            const normalized = Math.max(0, Math.min(1, 1 - ((clientY - rect.top) / rect.height)));
+            const db = Math.round(-12 + normalized * 24);
+
+            setBandValue(index, db);
+        }
+
+        faderZone.addEventListener('pointerdown', (e) => {
+            initAudioContext();
+            isDragging = true;
+            try {
+                faderZone.setPointerCapture(e.pointerId);
+            } catch (err) {}
+            faderZone.classList.add('dragging');
+            updateFromPointer(e.clientY);
+            playFrequencyTone(index);
+        });
+
+        faderZone.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            updateFromPointer(e.clientY);
+        });
+
+        const handlePointerEnd = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            faderZone.classList.remove('dragging');
+            try {
+                faderZone.releasePointerCapture(e.pointerId);
+            } catch (err) {}
+            saveState();
+        };
+
+        faderZone.addEventListener('pointerup', handlePointerEnd);
+        faderZone.addEventListener('pointercancel', handlePointerEnd);
+
+        // Keyboard navigation (Arrow Up/Down) for accessibility
+        faderZone.addEventListener('keydown', (e) => {
+            let current = state.eq.bands[index];
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setBandValue(index, Math.min(12, current + 1));
+                playFrequencyTone(index);
+                saveState();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setBandValue(index, Math.max(-12, current - 1));
+                playFrequencyTone(index);
+                saveState();
+            }
+        });
+    });
+}
+
+function setBandValue(index, db) {
+    if (!state.eq) state.eq = { enabled: true, preset: 'custom', bands: [0, 0, 0, 0, 0] };
+    state.eq.bands[index] = db;
+    state.eq.preset = 'custom';
+
+    updateFaderUI(index, db);
+    updateEqCurve();
+    applyEqToAudioOutput();
+
+    DOM.eqPresetBtns.forEach(btn => btn.classList.remove('active'));
+
+    if (DOM.eqActivePresetName) {
+        DOM.eqActivePresetName.textContent = 'Custom EQ • ' + (state.eq.enabled ? 'Enhanced Audio' : 'Bypassed');
+    }
+}
+
+// 8. Apply Preset
+function applyEqPreset(presetKey) {
+    initAudioContext();
+    const preset = EQ_PRESETS[presetKey] || EQ_PRESETS.flat;
+    if (!state.eq) state.eq = { enabled: true, preset: 'flat', bands: [0, 0, 0, 0, 0] };
+
+    state.eq.preset = presetKey;
+    state.eq.bands = [...preset.bands];
+
+    DOM.eqPresetBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === presetKey);
+    });
+
+    state.eq.bands.forEach((db, i) => {
+        updateFaderUI(i, db);
+    });
+
+    updateEqCurve();
+    applyEqToAudioOutput();
+
+    if (presetKey === 'bass' || presetKey === 'electronic') playFrequencyTone(0);
+    else if (presetKey === 'vocal') playFrequencyTone(2);
+    else if (presetKey === 'rock') playFrequencyTone(4);
+
+    if (DOM.eqActivePresetName) {
+        DOM.eqActivePresetName.textContent = `${preset.name} • ${state.eq.enabled ? preset.desc : 'Bypassed'}`;
+    }
+
+    saveState();
+}
+
+// 9. Master EQ Power / Bypass Switch
+function toggleEqPower(enabled) {
+    initAudioContext();
+    if (!state.eq) state.eq = { enabled: true, preset: 'flat', bands: [0, 0, 0, 0, 0] };
+    state.eq.enabled = enabled;
+
+    if (DOM.eqPowerToggle) DOM.eqPowerToggle.checked = enabled;
+    if (DOM.eqPowerStatus) DOM.eqPowerStatus.textContent = enabled ? 'EQ ON' : 'BYPASS';
+
+    const modal = DOM.eqModal;
+    if (modal) {
+        modal.classList.toggle('eq-disabled', !enabled);
+    }
+
+    if (DOM.eqActivePresetName) {
+        const curPreset = EQ_PRESETS[state.eq.preset] || { name: 'Custom EQ', desc: 'Equalizer' };
+        DOM.eqActivePresetName.textContent = enabled
+            ? `${curPreset.name} • Enhanced Sound Active`
+            : 'EQ Bypassed (Raw Audio Stream)';
+    }
+
+    applyEqToAudioOutput();
+    saveState();
+}
+
+// Modal open/close
 function openEqModal() {
+    initAudioContext();
     if (DOM.eqModal) {
         DOM.eqModal.classList.remove('hidden');
+        updateEqCurve();
+        state.eq?.bands?.forEach((db, i) => updateFaderUI(i, db));
     }
 }
 
@@ -1174,44 +1595,12 @@ function closeEqModal() {
 
 function toggleEqModal() {
     if (DOM.eqModal) {
-        DOM.eqModal.classList.toggle('hidden');
-    }
-}
-
-function applyEqPreset(presetName) {
-    const presetBands = EQ_PRESETS[presetName] || EQ_PRESETS.flat;
-    if (!state.eq) state.eq = { preset: 'flat', bands: [0, 0, 0, 0, 0] };
-    state.eq.preset = presetName;
-    state.eq.bands = [...presetBands];
-
-    DOM.eqPresetBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.preset === presetName);
-    });
-
-    state.eq.bands.forEach((val, idx) => {
-        if (DOM.eqSliders[idx]) {
-            DOM.eqSliders[idx].value = val;
+        if (DOM.eqModal.classList.contains('hidden')) {
+            openEqModal();
+        } else {
+            closeEqModal();
         }
-        if (DOM.eqDbLabels[idx]) {
-            DOM.eqDbLabels[idx].textContent = (val > 0 ? '+' : '') + val + 'dB';
-        }
-    });
-
-    saveState();
-}
-
-function updateEqSlider(index, val) {
-    const num = parseInt(val, 10);
-    if (!state.eq) state.eq = { preset: 'custom', bands: [0, 0, 0, 0, 0] };
-    state.eq.bands[index] = num;
-    state.eq.preset = 'custom';
-
-    if (DOM.eqDbLabels[index]) {
-        DOM.eqDbLabels[index].textContent = (num > 0 ? '+' : '') + num + 'dB';
     }
-
-    DOM.eqPresetBtns.forEach(btn => btn.classList.remove('active'));
-    saveState();
 }
 
 if (DOM.openEqBtn) DOM.openEqBtn.addEventListener('click', openEqModal);
@@ -1223,19 +1612,17 @@ if (DOM.resetEqBtn) {
     DOM.resetEqBtn.addEventListener('click', () => applyEqPreset('flat'));
 }
 
+if (DOM.eqPowerToggle) {
+    DOM.eqPowerToggle.addEventListener('change', (e) => {
+        toggleEqPower(e.target.checked);
+    });
+}
+
 DOM.eqPresetBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         const preset = btn.dataset.preset;
         if (preset) applyEqPreset(preset);
     });
-});
-
-DOM.eqSliders.forEach((slider, idx) => {
-    if (slider) {
-        slider.addEventListener('input', (e) => {
-            updateEqSlider(idx, e.target.value);
-        });
-    }
 });
 
 // --- Event Listeners ---
@@ -1385,7 +1772,11 @@ function saveState() {
         repeatMode: state.repeatMode,
         volume: state.volume,
         theme: state.theme,
-        eq: state.eq || { preset: 'flat', bands: [0, 0, 0, 0, 0] }
+        eq: {
+            enabled: state.eq?.enabled ?? true,
+            preset: state.eq?.preset || 'flat',
+            bands: state.eq?.bands || [0, 0, 0, 0, 0]
+        }
     };
     try {
         localStorage.setItem('playlistPlayerState', JSON.stringify(toSave));
@@ -1422,21 +1813,29 @@ function loadState() {
 
             // Restore EQ Settings
             if (state.eq) {
-                if (state.eq.preset && state.eq.preset !== 'custom') {
-                    DOM.eqPresetBtns.forEach(btn => {
-                        btn.classList.toggle('active', btn.dataset.preset === state.eq.preset);
-                    });
-                }
+                const isEnabled = state.eq.enabled ?? true;
+                if (DOM.eqPowerToggle) DOM.eqPowerToggle.checked = isEnabled;
+                if (DOM.eqPowerStatus) DOM.eqPowerStatus.textContent = isEnabled ? 'EQ ON' : 'BYPASS';
+
+                const presetKey = state.eq.preset || 'flat';
+                DOM.eqPresetBtns.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.preset === presetKey);
+                });
+
                 if (Array.isArray(state.eq.bands)) {
                     state.eq.bands.forEach((val, idx) => {
-                        if (DOM.eqSliders[idx]) {
-                            DOM.eqSliders[idx].value = val;
-                        }
-                        if (DOM.eqDbLabels[idx]) {
-                            DOM.eqDbLabels[idx].textContent = (val > 0 ? '+' : '') + val + 'dB';
-                        }
+                        updateFaderUI(idx, val);
                     });
                 }
+                updateEqCurve();
+                if (DOM.eqActivePresetName) {
+                    const p = EQ_PRESETS[presetKey] || { name: 'Custom EQ', desc: 'Enhanced Sound' };
+                    DOM.eqActivePresetName.textContent = isEnabled ? `${p.name} • ${p.desc}` : 'EQ Bypassed (Raw Audio Stream)';
+                }
+            } else {
+                state.eq = { enabled: true, preset: 'flat', bands: [0, 0, 0, 0, 0] };
+                state.eq.bands.forEach((val, idx) => updateFaderUI(idx, val));
+                updateEqCurve();
             }
 
             // Restore Theme
@@ -1446,6 +1845,9 @@ function loadState() {
         } else {
             updateShuffleUI();
             updateRepeatUI();
+            state.eq = { enabled: true, preset: 'flat', bands: [0, 0, 0, 0, 0] };
+            state.eq.bands.forEach((val, idx) => updateFaderUI(idx, val));
+            updateEqCurve();
         }
     } catch (e) {
         console.error('Could not load from localStorage', e);
@@ -1454,5 +1856,7 @@ function loadState() {
     }
 }
 
-// Initialize
+// Initialize Universal Faders & Spectrum Display
+setupPointerFaders();
+setupSpectrumBars();
 loadState();

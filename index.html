@@ -260,20 +260,51 @@
     </div>
 
     <!-- Audio Equalizer (EQ) Modal -->
-    <div id="eq-modal" class="eq-modal hidden">
+    <div id="eq-modal" class="eq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="eq-title">
         <div class="eq-backdrop" id="eq-backdrop"></div>
         <div class="eq-panel">
             <div class="eq-header">
                 <div class="eq-title-wrap">
-                    <i class="fa-solid fa-sliders accent-color"></i>
-                    <h3>Audio Equalizer & Sound Enhancer</h3>
+                    <div class="eq-icon-badge">
+                        <i class="fa-solid fa-sliders"></i>
+                    </div>
+                    <div>
+                        <h3 id="eq-title">Sound Equalizer & Enhancer</h3>
+                        <span class="eq-subtitle">Universal Device Compatible &bull; 5-Band Audio DSP</span>
+                    </div>
                 </div>
-                <button id="close-eq-btn" class="eq-close-btn">&times;</button>
+                <div class="eq-header-right">
+                    <label class="eq-switch-wrap" title="Toggle Equalizer On / Bypass">
+                        <input type="checkbox" id="eq-power-toggle" checked>
+                        <span class="eq-switch-slider"></span>
+                        <span class="eq-switch-label" id="eq-power-status">EQ ON</span>
+                    </label>
+                    <button id="close-eq-btn" class="eq-close-btn" aria-label="Close Equalizer">&times;</button>
+                </div>
+            </div>
+
+            <!-- Dynamic Frequency Response Curve & Spectrum Analyzer Display -->
+            <div class="eq-visualizer-display">
+                <div class="eq-spectrum-bars" id="eq-spectrum-bars"></div>
+                <div class="eq-curve-overlay">
+                    <svg class="eq-curve-svg" id="eq-curve-svg" viewBox="0 0 500 70" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="eq-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#1db954" stop-opacity="0.4" />
+                                <stop offset="100%" stop-color="#1db954" stop-opacity="0.0" />
+                            </linearGradient>
+                        </defs>
+                        <path id="eq-curve-path" d="M 0,35 L 500,35 L 500,70 L 0,70 Z" fill="url(#eq-gradient)" stroke="#1db954" stroke-width="2.5" />
+                    </svg>
+                </div>
             </div>
 
             <!-- EQ Presets -->
             <div class="eq-presets-wrap">
-                <span class="eq-label">PRESETS</span>
+                <div class="eq-presets-header">
+                    <span class="eq-label">PRESETS</span>
+                    <span class="eq-preset-hint">Tap any preset to instantly tune audio profile</span>
+                </div>
                 <div class="eq-presets-list" id="eq-presets-list">
                     <button class="eq-preset-btn active" data-preset="flat">Flat</button>
                     <button class="eq-preset-btn" data-preset="bass">Bass Boost 🔊</button>
@@ -285,44 +316,83 @@
                 </div>
             </div>
 
-            <!-- 5-Band Vertical Equalizer Sliders -->
-            <div class="eq-sliders-container">
-                <div class="eq-band">
+            <!-- 5-Band Touch & Mouse Interactive Vertical Faders -->
+            <div class="eq-sliders-container" id="eq-sliders-container">
+                <div class="eq-band" data-band-index="0">
                     <span class="eq-db-val" id="eq-val-0">0dB</span>
-                    <div class="eq-vertical-slider-wrap">
-                        <input type="range" class="eq-slider" id="eq-band-0" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Sub Bass 60Hz">
+                    <div class="eq-fader-touch-zone" id="eq-fader-0" role="slider" aria-label="Sub Bass 60Hz" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="0" tabindex="0">
+                        <div class="eq-fader-groove">
+                            <div class="eq-fader-center-line"></div>
+                            <div class="eq-fader-fill" id="eq-fill-0"></div>
+                            <div class="eq-fader-thumb" id="eq-thumb-0">
+                                <div class="eq-thumb-notch"></div>
+                            </div>
+                        </div>
+                        <input type="range" class="eq-slider sr-only" id="eq-band-0" min="-12" max="12" step="1" value="0" tabindex="-1">
                     </div>
                     <span class="eq-freq-label">60 Hz</span>
                     <span class="eq-band-name">Sub Bass</span>
                 </div>
-                <div class="eq-band">
+
+                <div class="eq-band" data-band-index="1">
                     <span class="eq-db-val" id="eq-val-1">0dB</span>
-                    <div class="eq-vertical-slider-wrap">
-                        <input type="range" class="eq-slider" id="eq-band-1" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Bass 230Hz">
+                    <div class="eq-fader-touch-zone" id="eq-fader-1" role="slider" aria-label="Bass 230Hz" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="0" tabindex="0">
+                        <div class="eq-fader-groove">
+                            <div class="eq-fader-center-line"></div>
+                            <div class="eq-fader-fill" id="eq-fill-1"></div>
+                            <div class="eq-fader-thumb" id="eq-thumb-1">
+                                <div class="eq-thumb-notch"></div>
+                            </div>
+                        </div>
+                        <input type="range" class="eq-slider sr-only" id="eq-band-1" min="-12" max="12" step="1" value="0" tabindex="-1">
                     </div>
                     <span class="eq-freq-label">230 Hz</span>
                     <span class="eq-band-name">Bass</span>
                 </div>
-                <div class="eq-band">
+
+                <div class="eq-band" data-band-index="2">
                     <span class="eq-db-val" id="eq-val-2">0dB</span>
-                    <div class="eq-vertical-slider-wrap">
-                        <input type="range" class="eq-slider" id="eq-band-2" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Mids 910Hz">
+                    <div class="eq-fader-touch-zone" id="eq-fader-2" role="slider" aria-label="Mids 910Hz" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="0" tabindex="0">
+                        <div class="eq-fader-groove">
+                            <div class="eq-fader-center-line"></div>
+                            <div class="eq-fader-fill" id="eq-fill-2"></div>
+                            <div class="eq-fader-thumb" id="eq-thumb-2">
+                                <div class="eq-thumb-notch"></div>
+                            </div>
+                        </div>
+                        <input type="range" class="eq-slider sr-only" id="eq-band-2" min="-12" max="12" step="1" value="0" tabindex="-1">
                     </div>
                     <span class="eq-freq-label">910 Hz</span>
                     <span class="eq-band-name">Mids</span>
                 </div>
-                <div class="eq-band">
+
+                <div class="eq-band" data-band-index="3">
                     <span class="eq-db-val" id="eq-val-3">0dB</span>
-                    <div class="eq-vertical-slider-wrap">
-                        <input type="range" class="eq-slider" id="eq-band-3" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Upper Mid 3.6kHz">
+                    <div class="eq-fader-touch-zone" id="eq-fader-3" role="slider" aria-label="Upper Mid 3.6kHz" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="0" tabindex="0">
+                        <div class="eq-fader-groove">
+                            <div class="eq-fader-center-line"></div>
+                            <div class="eq-fader-fill" id="eq-fill-3"></div>
+                            <div class="eq-fader-thumb" id="eq-thumb-3">
+                                <div class="eq-thumb-notch"></div>
+                            </div>
+                        </div>
+                        <input type="range" class="eq-slider sr-only" id="eq-band-3" min="-12" max="12" step="1" value="0" tabindex="-1">
                     </div>
                     <span class="eq-freq-label">3.6 kHz</span>
                     <span class="eq-band-name">Upper Mid</span>
                 </div>
-                <div class="eq-band">
+
+                <div class="eq-band" data-band-index="4">
                     <span class="eq-db-val" id="eq-val-4">0dB</span>
-                    <div class="eq-vertical-slider-wrap">
-                        <input type="range" class="eq-slider" id="eq-band-4" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Treble 14kHz">
+                    <div class="eq-fader-touch-zone" id="eq-fader-4" role="slider" aria-label="Treble 14kHz" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="0" tabindex="0">
+                        <div class="eq-fader-groove">
+                            <div class="eq-fader-center-line"></div>
+                            <div class="eq-fader-fill" id="eq-fill-4"></div>
+                            <div class="eq-fader-thumb" id="eq-thumb-4">
+                                <div class="eq-thumb-notch"></div>
+                            </div>
+                        </div>
+                        <input type="range" class="eq-slider sr-only" id="eq-band-4" min="-12" max="12" step="1" value="0" tabindex="-1">
                     </div>
                     <span class="eq-freq-label">14 kHz</span>
                     <span class="eq-band-name">Treble</span>
@@ -331,8 +401,13 @@
 
             <!-- Footer -->
             <div class="eq-footer">
-                <span class="eq-status-badge"><i class="fa-solid fa-circle-check"></i> Sound Enhancer Active</span>
-                <button id="reset-eq-btn" class="eq-reset-btn">Reset to Flat</button>
+                <div class="eq-status-indicator">
+                    <span class="status-dot pulsing"></span>
+                    <span id="eq-active-preset-name">Equalizer Active &bull; Enhanced Sound</span>
+                </div>
+                <button id="reset-eq-btn" class="eq-reset-btn" title="Reset all bands to 0dB">
+                    <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Flat
+                </button>
             </div>
         </div>
     </div>
