@@ -709,6 +709,9 @@ body {
     transition: var(--transition-fast);
     position: relative;
     padding: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .control-btn:hover {
@@ -718,6 +721,10 @@ body {
 
 .control-btn.active {
     color: var(--accent);
+}
+
+.control-btn.active:hover {
+    color: var(--accent-hover);
 }
 
 .control-btn.active::after {
@@ -730,6 +737,27 @@ body {
     height: 4px;
     border-radius: 50%;
     background-color: var(--accent);
+}
+
+/* Repeat One Badge */
+.repeat-badge {
+    position: absolute;
+    top: -1px;
+    right: -3px;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    color: #000;
+    background: var(--accent);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-family);
+    pointer-events: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 .play-pause {

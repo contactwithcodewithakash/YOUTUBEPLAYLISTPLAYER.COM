@@ -218,7 +218,7 @@ function onPlayerError(event) {
 
     // Skip to next song quickly on error (e.g. video not embeddable)
     if (state.tracks.length > 0) {
-        setTimeout(playNext, 400);
+        setTimeout(() => playNext(true), 400);
     }
 }
 
@@ -549,26 +549,22 @@ function togglePlay() {
     }
 }
 
-function playNext() {
+function playNext(userTriggered = false) {
     if (state.tracks.length === 0) {
         isTransitioning = false;
         return;
     }
 
-    if (state.repeatMode === 2) {
-        // Repeat one
-        try {
-            player.seekTo(0);
-            player.playVideo();
-        } catch (e) {}
-        isTransitioning = false;
+    // Natural end with Repeat One repeats the current song
+    if (!userTriggered && state.repeatMode === 2) {
+        handleSongEnd();
         return;
     }
 
     if (state.currentIndex < state.tracks.length - 1) {
         playSong(state.currentIndex + 1);
-    } else if (state.repeatMode === 1) {
-        // Repeat all: loop back to start
+    } else if (state.repeatMode === 1 || state.repeatMode === 2) {
+        // Repeat all (or user clicked next at end of playlist): loop back to start
         playSong(0);
     } else {
         // Stop at end
@@ -577,6 +573,11 @@ function playNext() {
         } catch (e) {}
         state.isPlaying = false;
         DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
+        const currentItem = DOM.trackContainer.children[state.currentIndex];
+        if (currentItem) {
+            const indexEl = currentItem.querySelector('.track-index');
+            if (indexEl) indexEl.innerHTML = state.currentIndex + 1;
+        }
         isTransitioning = false;
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'none';
@@ -587,18 +588,21 @@ function playNext() {
 function playPrev() {
     if (state.tracks.length === 0) return;
 
-    // If we're more than 3 seconds in, just restart the song
+    // If we're more than 3 seconds in, restart the song
     try {
-        if (player.getCurrentTime() > 3) {
-            player.seekTo(0);
+        if (player && player.getCurrentTime && player.getCurrentTime() > 3) {
+            player.seekTo(0, true);
+            DOM.currentTime.textContent = '0:00';
+            DOM.seekBar.value = 0;
+            DOM.seekBar.style.setProperty('--value', '0%');
             return;
         }
     } catch (e) {}
 
     if (state.currentIndex > 0) {
         playSong(state.currentIndex - 1);
-    } else if (state.repeatMode === 1) {
-        // Repeat all: wrap to end
+    } else if (state.repeatMode === 1 || state.repeatMode === 2) {
+        // Repeat all (or user clicked prev at start): wrap to end
         playSong(state.tracks.length - 1);
     }
 }
@@ -617,21 +621,47 @@ function triggerSongEnd() {
 
 function handleSongEnd() {
     if (state.repeatMode === 2) {
-        try {
-            player.seekTo(0);
-            player.playVideo();
-        } catch (e) {}
-        isTransitioning = false;
+        console.log("Repeat One: Replaying current track...");
+        const currentTrack = state.tracks[state.currentIndex];
+        if (currentTrack && player && isPlayerReady) {
+            try {
+                player.seekTo(0, true);
+                player.playVideo();
+            } catch (e) {
+                try {
+                    player.loadVideoById({
+                        videoId: currentTrack.videoId,
+                        startSeconds: 0
+                    });
+                } catch (err) {}
+            }
+            DOM.currentTime.textContent = '0:00';
+            DOM.seekBar.value = 0;
+            DOM.seekBar.style.setProperty('--value', '0%');
+            startProgressInterval();
+        }
+        setTimeout(() => {
+            isTransitioning = false;
+        }, 800);
     } else {
-        playNext();
+        playNext(false);
     }
+}
+
+function updateShuffleUI() {
+    DOM.shuffleBtn.classList.toggle('active', state.isShuffle);
+    DOM.shuffleBtn.title = state.isShuffle ? "Shuffle On (S)" : "Shuffle Off (S)";
+    DOM.shuffleBtn.setAttribute('aria-label', state.isShuffle ? "Shuffle On" : "Shuffle Off");
 }
 
 function toggleShuffle() {
     state.isShuffle = !state.isShuffle;
-    DOM.shuffleBtn.classList.toggle('active', state.isShuffle);
+    updateShuffleUI();
 
-    if (state.tracks.length === 0) return;
+    if (state.tracks.length === 0) {
+        saveState();
+        return;
+    }
 
     const currentTrack = state.tracks[state.currentIndex];
 
@@ -642,31 +672,39 @@ function toggleShuffle() {
     }
 
     // Find the current track in the new array to preserve what's playing
-    state.currentIndex = state.tracks.findIndex(t => t.videoId === currentTrack.videoId);
-    if (state.currentIndex === -1) state.currentIndex = 0;
+    if (currentTrack) {
+        const foundIndex = state.tracks.findIndex(t => t.videoId === currentTrack.videoId);
+        state.currentIndex = (foundIndex !== -1) ? foundIndex : 0;
+    }
 
     renderTrackList();
     updateTrackHighlight();
     saveState();
 }
 
-function toggleRepeat() {
+function updateRepeatUI() {
     // 0: None, 1: All, 2: One
-    state.repeatMode = (state.repeatMode + 1) % 3;
-
-    const icon = DOM.repeatBtn.querySelector('i');
-
     if (state.repeatMode === 0) {
         DOM.repeatBtn.classList.remove('active');
-        icon.className = 'fa-solid fa-repeat';
+        DOM.repeatBtn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
+        DOM.repeatBtn.title = "Repeat Off (R)";
+        DOM.repeatBtn.setAttribute('aria-label', 'Repeat Off');
     } else if (state.repeatMode === 1) {
         DOM.repeatBtn.classList.add('active');
-        icon.className = 'fa-solid fa-repeat';
+        DOM.repeatBtn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
+        DOM.repeatBtn.title = "Repeat All (R)";
+        DOM.repeatBtn.setAttribute('aria-label', 'Repeat All');
     } else if (state.repeatMode === 2) {
         DOM.repeatBtn.classList.add('active');
-        icon.className = 'fa-solid fa-repeat-1'; // repeat one icon
+        DOM.repeatBtn.innerHTML = '<i class="fa-solid fa-repeat"></i><span class="repeat-badge">1</span>';
+        DOM.repeatBtn.title = "Repeat One (R)";
+        DOM.repeatBtn.setAttribute('aria-label', 'Repeat One');
     }
+}
 
+function toggleRepeat() {
+    state.repeatMode = (state.repeatMode + 1) % 3;
+    updateRepeatUI();
     saveState();
 }
 
@@ -687,7 +725,7 @@ function setupMediaSessionHandlers() {
         navigator.mediaSession.setActionHandler('play', () => togglePlay());
         navigator.mediaSession.setActionHandler('pause', () => togglePlay());
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
-        navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+        navigator.mediaSession.setActionHandler('nexttrack', () => playNext(true));
         navigator.mediaSession.setActionHandler('seekto', (details) => {
             if (details.seekTime !== undefined && isPlayerReady && player && player.getDuration) {
                 player.seekTo(details.seekTime, true);
@@ -921,7 +959,7 @@ DOM.syncBtn.addEventListener('click', async () => {
 });
 
 DOM.playPauseBtn.addEventListener('click', togglePlay);
-DOM.nextBtn.addEventListener('click', playNext);
+DOM.nextBtn.addEventListener('click', () => playNext(true));
 DOM.prevBtn.addEventListener('click', playPrev);
 DOM.shuffleBtn.addEventListener('click', toggleShuffle);
 DOM.repeatBtn.addEventListener('click', toggleRepeat);
@@ -937,7 +975,7 @@ document.addEventListener('keydown', (e) => {
             togglePlay();
             break;
         case 'arrowright':
-            playNext();
+            playNext(true);
             break;
         case 'arrowleft':
             playPrev();
@@ -1002,19 +1040,8 @@ function loadState() {
             }
 
             // Restore Toggles
-            DOM.shuffleBtn.classList.toggle('active', state.isShuffle);
-
-            const rIcon = DOM.repeatBtn.querySelector('i');
-            if (state.repeatMode === 0) {
-                DOM.repeatBtn.classList.remove('active');
-                rIcon.className = 'fa-solid fa-repeat';
-            } else if (state.repeatMode === 1) {
-                DOM.repeatBtn.classList.add('active');
-                rIcon.className = 'fa-solid fa-repeat';
-            } else if (state.repeatMode === 2) {
-                DOM.repeatBtn.classList.add('active');
-                rIcon.className = 'fa-solid fa-repeat-1';
-            }
+            updateShuffleUI();
+            updateRepeatUI();
 
             // Restore Volume
             DOM.volumeSlider.value = state.volume;
@@ -1024,9 +1051,14 @@ function loadState() {
             document.documentElement.setAttribute('data-theme', state.theme);
             const tIcon = DOM.themeToggle.querySelector('i');
             tIcon.className = state.theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        } else {
+            updateShuffleUI();
+            updateRepeatUI();
         }
     } catch (e) {
         console.error('Could not load from localStorage', e);
+        updateShuffleUI();
+        updateRepeatUI();
     }
 }
 
