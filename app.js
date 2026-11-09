@@ -67,20 +67,52 @@ let player;
 let isPlayerReady = false;
 let progressInterval;
 let consecutiveErrors = 0;
+let isTransitioning = false;
+let isSeeking = false;
+let autoplayRetryTimeout = null;
+let lastCurrentTime = 0;
+let consecutiveStalls = 0;
+
+// Silent audio loop to maintain background playback permission on iOS Safari & Android
+const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==');
+silentAudio.loop = true;
+
+function enableBackgroundAudio() {
+    try {
+        silentAudio.play().catch(() => {});
+    } catch (e) {}
+}
+
+function disableBackgroundAudio() {
+    try {
+        silentAudio.pause();
+    } catch (e) {}
+}
 
 function onYouTubeIframeAPIReady() {
+    const origin = (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file:'))
+        ? window.location.origin
+        : undefined;
+
+    const playerVars = {
+        'playsinline': 1,
+        'autoplay': 1,
+        'controls': 0,
+        'disablekb': 1,
+        'fs': 0,
+        'rel': 0,
+        'enablejsapi': 1
+    };
+
+    if (origin) {
+        playerVars.origin = origin;
+    }
+
     player = new YT.Player('youtube-player', {
-        height: '250',
-        width: '250',
+        height: '200',
+        width: '200',
         videoId: '',
-        playerVars: {
-            'playsinline': 1,
-            'controls': 0,
-            'disablekb': 1,
-            'fs': 0,
-            'rel': 0,
-            'origin': window.location.origin
-        },
+        playerVars: playerVars,
         events: {
             'onReady': onPlayerReady,
             'onStateChange': onPlayerStateChange,
@@ -93,27 +125,73 @@ function onPlayerReady(event) {
     isPlayerReady = true;
     player.setVolume(state.volume);
 
+    // Setup initial lock screen / mediaSession handlers
+    setupMediaSessionHandlers();
+
     // Check if we need to auto-resume from local storage
-    if (state.tracks.length > 0 && state.currentIndex >= 0) {
-        // Just cue the video, don't auto-play to avoid browser blocks
+    if (state.tracks.length > 0 && state.currentIndex >= 0 && state.currentIndex < state.tracks.length) {
+        // Just cue the video, don't auto-play on initial page load to avoid browser blocks
         player.cueVideoById(state.tracks[state.currentIndex].videoId);
         updatePlayerUI();
     }
 }
 
 function onPlayerStateChange(event) {
-    // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
+    // YT.PlayerState: UNSTARTED = -1, ENDED = 0, PLAYING = 1, PAUSED = 2, BUFFERING = 3, CUED = 5
     if (event.data === YT.PlayerState.PLAYING) {
         state.isPlaying = true;
+        isTransitioning = false;
         consecutiveErrors = 0;
         DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-pause"></i>';
         startProgressInterval();
+        enableBackgroundAudio();
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'playing';
+        }
     } else if (event.data === YT.PlayerState.PAUSED) {
-        state.isPlaying = false;
-        DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
-        stopProgressInterval();
+        // Check if paused near the end of track (YouTube mobile freeze / end-screen bug)
+        const curr = (player && player.getCurrentTime) ? (player.getCurrentTime() || 0) : 0;
+        const dur = (player && player.getDuration) ? (player.getDuration() || 0) : 0;
+
+        if (dur > 0 && curr >= dur - 1.2 && !isTransitioning) {
+            console.log("Paused near end of track, auto-advancing...");
+            triggerSongEnd();
+            return;
+        }
+
+        if (!isTransitioning) {
+            state.isPlaying = false;
+            DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
+            stopProgressInterval();
+            disableBackgroundAudio();
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+        }
+    } else if (event.data === YT.PlayerState.BUFFERING) {
+        // Check if buffering at the end of track
+        const curr = (player && player.getCurrentTime) ? (player.getCurrentTime() || 0) : 0;
+        const dur = (player && player.getDuration) ? (player.getDuration() || 0) : 0;
+
+        if (dur > 0 && curr >= dur - 1.0 && !isTransitioning) {
+            console.log("Buffering near end of track, auto-advancing...");
+            triggerSongEnd();
+            return;
+        }
+
+        DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
     } else if (event.data === YT.PlayerState.ENDED) {
-        handleSongEnd();
+        console.log("YouTube ENDED event received");
+        triggerSongEnd();
+    } else if (event.data === YT.PlayerState.CUED || event.data === -1) {
+        // Mobile autoplay fallback: force play if in active session or transition
+        if (state.isPlaying || isTransitioning) {
+            try {
+                player.playVideo();
+            } catch (e) {
+                console.warn("Could not force play cued video", e);
+            }
+        }
     }
 }
 
@@ -121,16 +199,16 @@ function onPlayerError(event) {
     console.error("YouTube Player Error", event.data);
     consecutiveErrors++;
 
-    if (consecutiveErrors >= 3) {
-        showError("Too many playback errors. Music videos might be restricted from playing directly from local files. Try hosting the folder using a local server.");
+    if (consecutiveErrors >= 5) {
+        showError("Too many playback errors. These videos might be restricted from embedded playback.");
         state.isPlaying = false;
         DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
         return;
     }
 
-    // Skip to next song on error (e.g. video not embeddable)
+    // Skip to next song quickly on error (e.g. video not embeddable)
     if (state.tracks.length > 0) {
-        setTimeout(playNext, 1500);
+        setTimeout(playNext, 400);
     }
 }
 
@@ -283,6 +361,18 @@ function renderPlaylistInfo() {
 function renderTrackList() {
     DOM.trackContainer.innerHTML = '';
 
+    if (state.tracks.length === 0) {
+        DOM.trackContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-compact-disc empty-icon"></i>
+                <p>No playlist loaded. Paste a URL to start listening.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
     state.tracks.forEach((track, index) => {
         const div = document.createElement('div');
         div.className = `track-item ${index === state.currentIndex ? 'active' : ''}`;
@@ -291,27 +381,35 @@ function renderTrackList() {
         div.innerHTML = `
             <div class="track-index">${index + 1}</div>
             <div class="track-play-icon"><i class="fa-solid fa-play"></i></div>
-            <img class="track-thumb" src="${track.thumbnail}" alt="Thumbnail">
+            <img class="track-thumb" src="${track.thumbnail}" alt="Thumbnail" loading="lazy" width="40" height="40">
             <div class="track-info">
                 <div class="track-title">${escapeHTML(track.title)}</div>
                 <div class="track-channel">${escapeHTML(track.channelTitle)}</div>
             </div>
         `;
 
-        DOM.trackContainer.appendChild(div);
+        fragment.appendChild(div);
     });
+
+    DOM.trackContainer.appendChild(fragment);
 }
 
 function updateTrackHighlight() {
-    const items = DOM.trackContainer.querySelectorAll('.track-item');
-    items.forEach((item, index) => {
-        if (index === state.currentIndex) {
-            item.classList.add('active');
-            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-            item.classList.remove('active');
+    // Fast O(1) class toggle instead of looping through entire tracklist
+    const prevActive = DOM.trackContainer.querySelector('.track-item.active');
+    if (prevActive) {
+        prevActive.classList.remove('active');
+    }
+
+    const currentItem = DOM.trackContainer.children[state.currentIndex];
+    if (currentItem) {
+        currentItem.classList.add('active');
+        try {
+            currentItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (e) {
+            currentItem.scrollIntoView(false);
         }
-    });
+    }
 }
 
 function updatePlayerUI() {
@@ -344,41 +442,94 @@ function escapeHTML(str) {
 // --- Player Controls ---
 
 function playSong(index) {
-    if (index < 0 || index >= state.tracks.length) return;
-
-    state.currentIndex = index;
-    const track = state.tracks[index];
-
-    if (isPlayerReady) {
-        player.loadVideoById(track.videoId);
+    if (index < 0 || index >= state.tracks.length) {
+        isTransitioning = false;
+        return;
     }
 
-    updatePlayerUI();
+    state.currentIndex = index;
+    state.isPlaying = true;
+    const track = state.tracks[index];
+
+    // 1. Instant UI update for zero lag perception
+    DOM.nowPlayingThumb.src = track.thumbnail;
+    DOM.nowPlayingThumb.classList.remove('hidden');
+    DOM.nowPlayingInfoDiv.classList.remove('hidden');
+    DOM.nowPlayingTitle.textContent = track.title;
+    DOM.nowPlayingPlaylist.textContent = state.playlistInfo ? state.playlistInfo.title : 'My Playlist';
+
+    // Reset seekbar and timers immediately
+    DOM.currentTime.textContent = '0:00';
+    DOM.duration.textContent = '0:00';
+    DOM.seekBar.value = 0;
+    DOM.seekBar.style.setProperty('--value', '0%');
+    DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+    // Fast highlight in list
+    updateTrackHighlight();
+
+    // Lock screen media session integration
+    updateMediaSession(track);
+
+    // Save state
     saveState();
+
+    // 2. Load and play in YouTube player
+    if (isPlayerReady && player) {
+        try {
+            player.loadVideoById({
+                videoId: track.videoId,
+                startSeconds: 0
+            });
+        } catch (e) {
+            console.warn("loadVideoById fallback:", e);
+            player.loadVideoById(track.videoId);
+        }
+
+        // Mobile autoplay watchdog: ensure playback begins if browser hesitates
+        clearTimeout(autoplayRetryTimeout);
+        autoplayRetryTimeout = setTimeout(() => {
+            if (isPlayerReady && state.isPlaying) {
+                try {
+                    const s = player.getPlayerState();
+                    if (s !== YT.PlayerState.PLAYING && s !== YT.PlayerState.BUFFERING) {
+                        console.log("Autoplay watchdog: forcing playVideo()");
+                        player.playVideo();
+                    }
+                } catch (e) {}
+            }
+        }, 800);
+    }
 }
 
 function togglePlay() {
     if (!isPlayerReady || state.tracks.length === 0) return;
 
+    if (state.currentIndex === -1 && state.tracks.length > 0) {
+        playSong(0);
+        return;
+    }
+
     if (state.isPlaying) {
         player.pauseVideo();
     } else {
-        // If we just loaded and haven't played yet
-        if (player.getPlayerState() === YT.PlayerState.CUED || player.getPlayerState() === YT.PlayerState.UNSTARTED) {
-            player.playVideo();
-        } else {
-            player.playVideo();
-        }
+        player.playVideo();
     }
 }
 
 function playNext() {
-    if (state.tracks.length === 0) return;
+    if (state.tracks.length === 0) {
+        isTransitioning = false;
+        return;
+    }
 
     if (state.repeatMode === 2) {
         // Repeat one
-        player.seekTo(0);
-        player.playVideo();
+        try {
+            player.seekTo(0);
+            player.playVideo();
+        } catch (e) {}
+        isTransitioning = false;
         return;
     }
 
@@ -389,9 +540,15 @@ function playNext() {
         playSong(0);
     } else {
         // Stop at end
-        player.stopVideo();
+        try {
+            player.stopVideo();
+        } catch (e) {}
         state.isPlaying = false;
         DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
+        isTransitioning = false;
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'none';
+        }
     }
 }
 
@@ -399,10 +556,12 @@ function playPrev() {
     if (state.tracks.length === 0) return;
 
     // If we're more than 3 seconds in, just restart the song
-    if (player.getCurrentTime() > 3) {
-        player.seekTo(0);
-        return;
-    }
+    try {
+        if (player.getCurrentTime() > 3) {
+            player.seekTo(0);
+            return;
+        }
+    } catch (e) {}
 
     if (state.currentIndex > 0) {
         playSong(state.currentIndex - 1);
@@ -412,10 +571,25 @@ function playPrev() {
     }
 }
 
+// Debounced auto-advance trigger
+function triggerSongEnd() {
+    if (isTransitioning) return;
+    isTransitioning = true;
+    console.log("Auto-advancing to next song...");
+    handleSongEnd();
+    // Reset transition lock
+    setTimeout(() => {
+        isTransitioning = false;
+    }, 1500);
+}
+
 function handleSongEnd() {
     if (state.repeatMode === 2) {
-        player.seekTo(0);
-        player.playVideo();
+        try {
+            player.seekTo(0);
+            player.playVideo();
+        } catch (e) {}
+        isTransitioning = false;
     } else {
         playNext();
     }
@@ -472,22 +646,75 @@ function shuffleArray(array) {
     return array;
 }
 
+// --- MediaSession (Lockscreen & Background Audio Support) ---
+
+function setupMediaSessionHandlers() {
+    if (!('mediaSession' in navigator)) return;
+
+    try {
+        navigator.mediaSession.setActionHandler('play', () => togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+        navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.seekTime !== undefined && isPlayerReady && player && player.getDuration) {
+                player.seekTo(details.seekTime, true);
+                DOM.currentTime.textContent = formatTime(details.seekTime);
+            }
+        });
+    } catch (e) {
+        console.warn('Error setting up mediaSession action handlers:', e);
+    }
+}
+
+function updateMediaSession(track) {
+    if (!('mediaSession' in navigator) || !track) return;
+
+    try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: track.title,
+            artist: track.channelTitle || (state.playlistInfo ? state.playlistInfo.title : 'YouTube Music'),
+            album: state.playlistInfo ? state.playlistInfo.title : 'Playlist Player',
+            artwork: [
+                { src: track.thumbnail, sizes: '96x96', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '128x128', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '192x192', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '256x256', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }
+            ]
+        });
+        navigator.mediaSession.playbackState = 'playing';
+    } catch (e) {
+        console.warn('Error updating MediaSession metadata:', e);
+    }
+}
+
 // --- Progress & Volume ---
 
 function startProgressInterval() {
     stopProgressInterval();
-    progressInterval = setInterval(updateProgress, 500);
+    // 250ms interval for smooth seekbar updates and fast end-detection
+    progressInterval = setInterval(updateProgress, 250);
 }
 
 function stopProgressInterval() {
-    clearInterval(progressInterval);
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
 }
 
 function updateProgress() {
     if (!isPlayerReady || !state.isPlaying) return;
 
-    const curr = player.getCurrentTime() || 0;
-    const dur = player.getDuration() || 0;
+    let curr = 0;
+    let dur = 0;
+    try {
+        curr = player.getCurrentTime() || 0;
+        dur = player.getDuration() || 0;
+    } catch (e) {
+        return;
+    }
 
     DOM.currentTime.textContent = formatTime(curr);
     DOM.duration.textContent = formatTime(dur);
@@ -496,7 +723,32 @@ function updateProgress() {
         const val = (curr / dur) * 100;
         DOM.seekBar.value = val;
         DOM.seekBar.style.setProperty('--value', val + '%');
+
+        // Watchdog 1: Near-End Advance (trigger next song ~0.45s before end for gapless feeling)
+        if (curr >= dur - 0.45 && !isTransitioning) {
+            console.log("Watchdog: Song reached end threshold", curr, dur);
+            triggerSongEnd();
+            return;
+        }
+
+        // Watchdog 2: Stall Detector (if within 1.5s of end and audio has stopped advancing)
+        if (curr >= dur - 1.5 && !isTransitioning) {
+            if (Math.abs(curr - lastCurrentTime) < 0.05) {
+                consecutiveStalls++;
+                if (consecutiveStalls >= 3) { // 3 * 250ms = 750ms stall
+                    console.log("Watchdog: Stalled near end of song, advancing...");
+                    consecutiveStalls = 0;
+                    triggerSongEnd();
+                    return;
+                }
+            } else {
+                consecutiveStalls = 0;
+            }
+        } else {
+            consecutiveStalls = 0;
+        }
     }
+    lastCurrentTime = curr;
 }
 
 DOM.seekBar.addEventListener('input', (e) => {
@@ -504,6 +756,8 @@ DOM.seekBar.addEventListener('input', (e) => {
     const dur = player.getDuration();
     const val = e.target.value;
     const seekTime = (val / 100) * dur;
+    lastCurrentTime = seekTime;
+    consecutiveStalls = 0;
     player.seekTo(seekTime, true);
     DOM.currentTime.textContent = formatTime(seekTime);
     DOM.seekBar.style.setProperty('--value', val + '%');

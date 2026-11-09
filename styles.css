@@ -317,6 +317,9 @@ button:hover {
     gap: 16px;
     cursor: pointer;
     transition: background-color var(--transition-fast);
+    contain: content;
+    content-visibility: auto;
+    contain-intrinsic-size: 56px;
 }
 
 .track-item:hover {
