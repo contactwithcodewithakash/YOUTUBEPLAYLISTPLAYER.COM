@@ -117,10 +117,11 @@
         <!-- Bottom Player Bar -->
         <footer class="app-player">
             <div class="player-content">
-                <!-- Left: Now Playing -->
-                <div class="now-playing">
+                <!-- Left: Now Playing (Click to Open Full Player) -->
+                <div class="now-playing" id="now-playing-box" title="Click to open Full Music Player">
                     <div class="now-playing-thumb-wrap">
                         <img id="now-playing-thumb" src="https://via.placeholder.com/60" alt="Song Thumbnail" class="hidden">
+                        <div class="expand-badge-overlay"><i class="fa-solid fa-expand"></i></div>
                     </div>
                     <div class="now-playing-info hidden">
                         <h4 id="now-playing-title" class="truncate-text">Song Title</h4>
@@ -156,8 +157,14 @@
                     </div>
                 </div>
 
-                <!-- Right: Volume -->
+                <!-- Right: Volume & Tool Buttons -->
                 <div class="volume-controls">
+                    <button id="open-eq-btn" class="control-btn" title="Sound Equalizer (E)">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                    <button id="expand-full-player-btn" class="control-btn" title="Full Music Player (F)">
+                        <i class="fa-solid fa-expand"></i>
+                    </button>
                     <button id="mute-btn" class="control-btn" title="Mute (M)">
                         <i class="fa-solid fa-volume-high"></i>
                     </button>
@@ -167,6 +174,167 @@
                 </div>
             </div>
         </footer>
+    </div>
+
+    <!-- Full Music Theme Page / Expanded Player Screen -->
+    <div id="full-player-screen" class="full-player-screen hidden">
+        <div class="full-player-backdrop" id="full-player-backdrop"></div>
+        <div class="full-player-container">
+            <!-- Top Bar -->
+            <div class="full-player-top">
+                <button id="close-full-player-btn" class="full-icon-btn" title="Minimize (Esc)">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <div class="full-player-heading">
+                    <span class="heading-tag">PLAYING FROM PLAYLIST</span>
+                    <span class="heading-playlist" id="full-player-playlist-name">YouTube Playlist</span>
+                </div>
+                <button id="full-open-eq-btn" class="full-icon-btn" title="Audio Equalizer">
+                    <i class="fa-solid fa-sliders"></i>
+                </button>
+            </div>
+
+            <!-- Artwork & Vinyl Centerpiece -->
+            <div class="full-player-center">
+                <div class="full-artwork-wrapper">
+                    <div class="vinyl-record" id="full-player-vinyl">
+                        <img id="full-player-cover" src="https://via.placeholder.com/500" alt="Album Cover">
+                        <div class="vinyl-center-pin"></div>
+                    </div>
+                </div>
+
+                <!-- Animated Sound Wave Visualizer -->
+                <div class="full-visualizer-bars" id="full-visualizer-bars">
+                    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                </div>
+
+                <!-- Song Title & Channel -->
+                <div class="full-player-meta">
+                    <h2 id="full-player-title" class="full-title">Song Title</h2>
+                    <p id="full-player-artist" class="full-artist">Artist / Channel</p>
+                </div>
+            </div>
+
+            <!-- Bottom Controls & Progress -->
+            <div class="full-player-bottom">
+                <div class="full-progress-container">
+                    <div class="full-time-row">
+                        <span id="full-current-time">0:00</span>
+                        <span id="full-duration">0:00</span>
+                    </div>
+                    <input type="range" id="full-seek-bar" value="0" min="0" max="100" step="0.1" aria-label="Seek track">
+                </div>
+
+                <div class="full-controls-row">
+                    <button id="full-shuffle-btn" class="control-btn" title="Shuffle (S)">
+                        <i class="fa-solid fa-shuffle"></i>
+                    </button>
+                    <button id="full-prev-btn" class="control-btn" title="Previous (Left Arrow)">
+                        <i class="fa-solid fa-backward-step"></i>
+                    </button>
+                    <button id="full-play-pause-btn" class="control-btn full-play-pause" title="Play/Pause (Space)">
+                        <i class="fa-solid fa-circle-play"></i>
+                    </button>
+                    <button id="full-next-btn" class="control-btn" title="Next (Right Arrow)">
+                        <i class="fa-solid fa-forward-step"></i>
+                    </button>
+                    <button id="full-repeat-btn" class="control-btn" title="Repeat (R)">
+                        <i class="fa-solid fa-repeat"></i>
+                    </button>
+                </div>
+
+                <div class="full-volume-row">
+                    <button id="full-mute-btn" class="control-btn" title="Mute">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </button>
+                    <div class="full-volume-slider-wrap">
+                        <input type="range" id="full-volume-slider" value="100" min="0" max="100" aria-label="Volume">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Equalizer (EQ) Modal -->
+    <div id="eq-modal" class="eq-modal hidden">
+        <div class="eq-backdrop" id="eq-backdrop"></div>
+        <div class="eq-panel">
+            <div class="eq-header">
+                <div class="eq-title-wrap">
+                    <i class="fa-solid fa-sliders accent-color"></i>
+                    <h3>Audio Equalizer & Sound Enhancer</h3>
+                </div>
+                <button id="close-eq-btn" class="eq-close-btn">&times;</button>
+            </div>
+
+            <!-- EQ Presets -->
+            <div class="eq-presets-wrap">
+                <span class="eq-label">PRESETS</span>
+                <div class="eq-presets-list" id="eq-presets-list">
+                    <button class="eq-preset-btn active" data-preset="flat">Flat</button>
+                    <button class="eq-preset-btn" data-preset="bass">Bass Boost 🔊</button>
+                    <button class="eq-preset-btn" data-preset="rock">Rock 🎸</button>
+                    <button class="eq-preset-btn" data-preset="pop">Pop ✨</button>
+                    <button class="eq-preset-btn" data-preset="electronic">Electronic ⚡</button>
+                    <button class="eq-preset-btn" data-preset="vocal">Vocal Boost 🎤</button>
+                    <button class="eq-preset-btn" data-preset="jazz">Acoustic / Jazz 🎷</button>
+                </div>
+            </div>
+
+            <!-- 5-Band Vertical Equalizer Sliders -->
+            <div class="eq-sliders-container">
+                <div class="eq-band">
+                    <span class="eq-db-val" id="eq-val-0">0dB</span>
+                    <div class="eq-vertical-slider-wrap">
+                        <input type="range" class="eq-slider" id="eq-band-0" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Sub Bass 60Hz">
+                    </div>
+                    <span class="eq-freq-label">60 Hz</span>
+                    <span class="eq-band-name">Sub Bass</span>
+                </div>
+                <div class="eq-band">
+                    <span class="eq-db-val" id="eq-val-1">0dB</span>
+                    <div class="eq-vertical-slider-wrap">
+                        <input type="range" class="eq-slider" id="eq-band-1" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Bass 230Hz">
+                    </div>
+                    <span class="eq-freq-label">230 Hz</span>
+                    <span class="eq-band-name">Bass</span>
+                </div>
+                <div class="eq-band">
+                    <span class="eq-db-val" id="eq-val-2">0dB</span>
+                    <div class="eq-vertical-slider-wrap">
+                        <input type="range" class="eq-slider" id="eq-band-2" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Mids 910Hz">
+                    </div>
+                    <span class="eq-freq-label">910 Hz</span>
+                    <span class="eq-band-name">Mids</span>
+                </div>
+                <div class="eq-band">
+                    <span class="eq-db-val" id="eq-val-3">0dB</span>
+                    <div class="eq-vertical-slider-wrap">
+                        <input type="range" class="eq-slider" id="eq-band-3" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Upper Mid 3.6kHz">
+                    </div>
+                    <span class="eq-freq-label">3.6 kHz</span>
+                    <span class="eq-band-name">Upper Mid</span>
+                </div>
+                <div class="eq-band">
+                    <span class="eq-db-val" id="eq-val-4">0dB</span>
+                    <div class="eq-vertical-slider-wrap">
+                        <input type="range" class="eq-slider" id="eq-band-4" min="-12" max="12" step="1" value="0" orient="vertical" aria-label="Treble 14kHz">
+                    </div>
+                    <span class="eq-freq-label">14 kHz</span>
+                    <span class="eq-band-name">Treble</span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="eq-footer">
+                <span class="eq-status-badge"><i class="fa-solid fa-circle-check"></i> Sound Enhancer Active</span>
+                <button id="reset-eq-btn" class="eq-reset-btn">Reset to Flat</button>
+            </div>
+        </div>
     </div>
 
     <!-- YouTube IFrame API -->

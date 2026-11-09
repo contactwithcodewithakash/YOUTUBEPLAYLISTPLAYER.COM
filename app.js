@@ -15,7 +15,11 @@ const state = {
     isShuffle: false,
     repeatMode: 0, // 0: none, 1: all, 2: one
     volume: 100,
-    theme: 'dark'
+    theme: 'dark',
+    eq: {
+        preset: 'flat',
+        bands: [0, 0, 0, 0, 0]
+    }
 };
 
 // --- DOM Elements ---
@@ -37,10 +41,12 @@ const DOM = {
     trackContainer: document.getElementById('playlist-tracks'),
 
     // Player Bar
+    nowPlayingBox: document.getElementById('now-playing-box'),
     nowPlayingThumb: document.getElementById('now-playing-thumb'),
     nowPlayingTitle: document.getElementById('now-playing-title'),
     nowPlayingPlaylist: document.getElementById('now-playing-playlist'),
     nowPlayingInfoDiv: document.querySelector('.now-playing-info'),
+    expandFullPlayerBtn: document.getElementById('expand-full-player-btn'),
 
     // Controls
     playPauseBtn: document.getElementById('play-pause-btn'),
@@ -59,7 +65,51 @@ const DOM = {
     volumeSlider: document.getElementById('volume-slider'),
 
     // Theme
-    themeToggle: document.getElementById('theme-toggle')
+    themeToggle: document.getElementById('theme-toggle'),
+
+    // Full Music Player Page
+    fullPlayerScreen: document.getElementById('full-player-screen'),
+    closeFullPlayerBtn: document.getElementById('close-full-player-btn'),
+    fullPlayerBackdrop: document.getElementById('full-player-backdrop'),
+    fullPlayerPlaylistName: document.getElementById('full-player-playlist-name'),
+    fullPlayerCover: document.getElementById('full-player-cover'),
+    fullPlayerVinyl: document.getElementById('full-player-vinyl'),
+    fullVisualizerBars: document.getElementById('full-visualizer-bars'),
+    fullPlayerTitle: document.getElementById('full-player-title'),
+    fullPlayerArtist: document.getElementById('full-player-artist'),
+    fullCurrentTime: document.getElementById('full-current-time'),
+    fullDuration: document.getElementById('full-duration'),
+    fullSeekBar: document.getElementById('full-seek-bar'),
+    fullPlayPauseBtn: document.getElementById('full-play-pause-btn'),
+    fullPrevBtn: document.getElementById('full-prev-btn'),
+    fullNextBtn: document.getElementById('full-next-btn'),
+    fullShuffleBtn: document.getElementById('full-shuffle-btn'),
+    fullRepeatBtn: document.getElementById('full-repeat-btn'),
+    fullMuteBtn: document.getElementById('full-mute-btn'),
+    fullVolumeSlider: document.getElementById('full-volume-slider'),
+    fullOpenEqBtn: document.getElementById('full-open-eq-btn'),
+
+    // Audio Equalizer
+    openEqBtn: document.getElementById('open-eq-btn'),
+    eqModal: document.getElementById('eq-modal'),
+    eqBackdrop: document.getElementById('eq-backdrop'),
+    closeEqBtn: document.getElementById('close-eq-btn'),
+    resetEqBtn: document.getElementById('reset-eq-btn'),
+    eqPresetBtns: document.querySelectorAll('.eq-preset-btn'),
+    eqSliders: [
+        document.getElementById('eq-band-0'),
+        document.getElementById('eq-band-1'),
+        document.getElementById('eq-band-2'),
+        document.getElementById('eq-band-3'),
+        document.getElementById('eq-band-4')
+    ],
+    eqDbLabels: [
+        document.getElementById('eq-val-0'),
+        document.getElementById('eq-val-1'),
+        document.getElementById('eq-val-2'),
+        document.getElementById('eq-val-3'),
+        document.getElementById('eq-val-4')
+    ]
 };
 
 // --- YouTube IFrame API ---
@@ -153,6 +203,10 @@ function onPlayerStateChange(event) {
         isTransitioning = false;
         consecutiveErrors = 0;
         DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-pause"></i>';
+        if (DOM.fullPlayPauseBtn) DOM.fullPlayPauseBtn.innerHTML = '<i class="fa-solid fa-circle-pause"></i>';
+        if (DOM.fullPlayerVinyl) DOM.fullPlayerVinyl.classList.add('playing');
+        if (DOM.fullVisualizerBars) DOM.fullVisualizerBars.classList.add('playing');
+
         const currentItem = DOM.trackContainer.children[state.currentIndex];
         if (currentItem) {
             const indexEl = currentItem.querySelector('.track-index');
@@ -177,6 +231,10 @@ function onPlayerStateChange(event) {
         if (!isTransitioning) {
             state.isPlaying = false;
             DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
+            if (DOM.fullPlayPauseBtn) DOM.fullPlayPauseBtn.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
+            if (DOM.fullPlayerVinyl) DOM.fullPlayerVinyl.classList.remove('playing');
+            if (DOM.fullVisualizerBars) DOM.fullVisualizerBars.classList.remove('playing');
+
             const currentItem = DOM.trackContainer.children[state.currentIndex];
             if (currentItem) {
                 const indexEl = currentItem.querySelector('.track-index');
@@ -207,6 +265,7 @@ function onPlayerStateChange(event) {
         }
 
         DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        if (DOM.fullPlayPauseBtn) DOM.fullPlayPauseBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
     } else if (event.data === YT.PlayerState.ENDED) {
         console.log("YouTube ENDED event received");
         triggerSongEnd();
@@ -248,7 +307,7 @@ DOM.form.addEventListener('submit', async (e) => {
     const playlistId = extractPlaylistId(url);
 
     if (!playlistId) {
-        showError('Invalid YouTube Playlist URL. Ensure it contains "list=".');
+        showError('Invalid YouTube Playlist URL or ID. Please check the link and try again.');
         return;
     }
 
@@ -257,8 +316,14 @@ DOM.form.addEventListener('submit', async (e) => {
         return;
     }
 
+    const submitBtn = document.getElementById('load-submit-btn') || DOM.form.querySelector('button[type="submit"]');
+
     try {
         hideError();
+        if (submitBtn) {
+            submitBtn.innerHTML = '<span>Loading...</span> <i class="fa-solid fa-spinner fa-spin"></i>';
+            submitBtn.disabled = true;
+        }
         DOM.playAllBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; // Loading state
 
         const info = await fetchPlaylistInfo(playlistId);
@@ -315,13 +380,27 @@ DOM.form.addEventListener('submit', async (e) => {
         console.error(err);
         showError(err.message || 'Failed to load playlist. Check your internet connection or API Key.');
         DOM.playAllBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    } finally {
+        if (submitBtn) {
+            submitBtn.innerHTML = '<span>Load Playlist</span> <i class="fa-solid fa-arrow-right"></i>';
+            submitBtn.disabled = false;
+        }
     }
 });
 
 function extractPlaylistId(url) {
+    if (!url) return null;
+    const trimmed = url.trim();
     const regExp = /[?&]list=([^#\&\?]+)/;
-    const match = url.match(regExp);
-    return (match && match[1]) ? match[1] : null;
+    const match = trimmed.match(regExp);
+    if (match && match[1]) {
+        return match[1];
+    }
+    // Direct playlist ID check (e.g. PL..., RD..., OLAK5uy_...)
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) {
+        return trimmed;
+    }
+    return null;
 }
 
 async function fetchPlaylistInfo(playlistId) {
@@ -413,7 +492,10 @@ function renderTrackList() {
         const div = document.createElement('div');
         div.className = `track-item ${index === state.currentIndex ? 'active' : ''}`;
         div.dataset.index = index;
-        div.onclick = () => playSong(index);
+        div.onclick = () => {
+            playSong(index);
+            openFullPlayer();
+        };
 
         const isCurrent = (index === state.currentIndex);
         div.innerHTML = `
@@ -466,12 +548,31 @@ function updatePlayerUI() {
 
     const track = state.tracks[state.currentIndex];
 
+    // Bottom Player Bar
     DOM.nowPlayingThumb.src = track.thumbnail;
     DOM.nowPlayingThumb.classList.remove('hidden');
     DOM.nowPlayingInfoDiv.classList.remove('hidden');
 
     DOM.nowPlayingTitle.textContent = track.title;
     DOM.nowPlayingPlaylist.textContent = state.playlistInfo ? state.playlistInfo.title : 'My Playlist';
+
+    // Full Music Player Page
+    if (DOM.fullPlayerCover) DOM.fullPlayerCover.src = track.thumbnail;
+    if (DOM.fullPlayerTitle) DOM.fullPlayerTitle.textContent = track.title;
+    if (DOM.fullPlayerArtist) DOM.fullPlayerArtist.textContent = track.channelTitle || 'Artist';
+    if (DOM.fullPlayerPlaylistName) DOM.fullPlayerPlaylistName.textContent = state.playlistInfo ? state.playlistInfo.title : 'YouTube Playlist';
+
+    if (DOM.fullPlayerVinyl) {
+        DOM.fullPlayerVinyl.classList.toggle('playing', state.isPlaying);
+    }
+    if (DOM.fullVisualizerBars) {
+        DOM.fullVisualizerBars.classList.toggle('playing', state.isPlaying);
+    }
+    if (DOM.fullPlayPauseBtn) {
+        DOM.fullPlayPauseBtn.innerHTML = state.isPlaying
+            ? '<i class="fa-solid fa-circle-pause"></i>'
+            : '<i class="fa-solid fa-circle-play"></i>';
+    }
 
     updateTrackHighlight();
 }
@@ -507,12 +608,25 @@ function playSong(index) {
     DOM.nowPlayingTitle.textContent = track.title;
     DOM.nowPlayingPlaylist.textContent = state.playlistInfo ? state.playlistInfo.title : 'My Playlist';
 
+    if (DOM.fullPlayerCover) DOM.fullPlayerCover.src = track.thumbnail;
+    if (DOM.fullPlayerTitle) DOM.fullPlayerTitle.textContent = track.title;
+    if (DOM.fullPlayerArtist) DOM.fullPlayerArtist.textContent = track.channelTitle || 'Artist';
+    if (DOM.fullPlayerPlaylistName) DOM.fullPlayerPlaylistName.textContent = state.playlistInfo ? state.playlistInfo.title : 'YouTube Playlist';
+
     // Reset seekbar and timers immediately
     DOM.currentTime.textContent = '0:00';
     DOM.duration.textContent = '0:00';
     DOM.seekBar.value = 0;
     DOM.seekBar.style.setProperty('--value', '0%');
     DOM.playPauseBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+    if (DOM.fullCurrentTime) DOM.fullCurrentTime.textContent = '0:00';
+    if (DOM.fullDuration) DOM.fullDuration.textContent = '0:00';
+    if (DOM.fullSeekBar) {
+        DOM.fullSeekBar.value = 0;
+        DOM.fullSeekBar.style.setProperty('--value', '0%');
+    }
+    if (DOM.fullPlayPauseBtn) DOM.fullPlayPauseBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
     // Fast highlight in list
     updateTrackHighlight();
@@ -691,12 +805,6 @@ function handleSongEnd() {
     }
 }
 
-function updateShuffleUI() {
-    DOM.shuffleBtn.classList.toggle('active', state.isShuffle);
-    DOM.shuffleBtn.title = state.isShuffle ? "Shuffle On (S)" : "Shuffle Off (S)";
-    DOM.shuffleBtn.setAttribute('aria-label', state.isShuffle ? "Shuffle On" : "Shuffle Off");
-}
-
 function toggleShuffle() {
     state.isShuffle = !state.isShuffle;
     updateShuffleUI();
@@ -725,24 +833,36 @@ function toggleShuffle() {
     saveState();
 }
 
+function updateShuffleUI() {
+    const btns = [DOM.shuffleBtn, DOM.fullShuffleBtn].filter(Boolean);
+    btns.forEach(btn => {
+        btn.classList.toggle('active', state.isShuffle);
+        btn.title = state.isShuffle ? "Shuffle On (S)" : "Shuffle Off (S)";
+        btn.setAttribute('aria-label', state.isShuffle ? "Shuffle On" : "Shuffle Off");
+    });
+}
+
 function updateRepeatUI() {
     // 0: None, 1: All, 2: One
-    if (state.repeatMode === 0) {
-        DOM.repeatBtn.classList.remove('active');
-        DOM.repeatBtn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
-        DOM.repeatBtn.title = "Repeat Off (R)";
-        DOM.repeatBtn.setAttribute('aria-label', 'Repeat Off');
-    } else if (state.repeatMode === 1) {
-        DOM.repeatBtn.classList.add('active');
-        DOM.repeatBtn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
-        DOM.repeatBtn.title = "Repeat All (R)";
-        DOM.repeatBtn.setAttribute('aria-label', 'Repeat All');
-    } else if (state.repeatMode === 2) {
-        DOM.repeatBtn.classList.add('active');
-        DOM.repeatBtn.innerHTML = '<i class="fa-solid fa-repeat"></i><span class="repeat-badge">1</span>';
-        DOM.repeatBtn.title = "Repeat One (R)";
-        DOM.repeatBtn.setAttribute('aria-label', 'Repeat One');
-    }
+    const btns = [DOM.repeatBtn, DOM.fullRepeatBtn].filter(Boolean);
+    btns.forEach(btn => {
+        if (state.repeatMode === 0) {
+            btn.classList.remove('active');
+            btn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
+            btn.title = "Repeat Off (R)";
+            btn.setAttribute('aria-label', 'Repeat Off');
+        } else if (state.repeatMode === 1) {
+            btn.classList.add('active');
+            btn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
+            btn.title = "Repeat All (R)";
+            btn.setAttribute('aria-label', 'Repeat All');
+        } else if (state.repeatMode === 2) {
+            btn.classList.add('active');
+            btn.innerHTML = '<i class="fa-solid fa-repeat"></i><span class="repeat-badge">1</span>';
+            btn.title = "Repeat One (R)";
+            btn.setAttribute('aria-label', 'Repeat One');
+        }
+    });
 }
 
 function toggleRepeat() {
@@ -773,6 +893,7 @@ function setupMediaSessionHandlers() {
             if (details.seekTime !== undefined && isPlayerReady && player && player.getDuration) {
                 player.seekTo(details.seekTime, true);
                 DOM.currentTime.textContent = formatTime(details.seekTime);
+                if (DOM.fullCurrentTime) DOM.fullCurrentTime.textContent = formatTime(details.seekTime);
             }
         });
     } catch (e) {
@@ -831,11 +952,17 @@ function updateProgress() {
 
     DOM.currentTime.textContent = formatTime(curr);
     DOM.duration.textContent = formatTime(dur);
+    if (DOM.fullCurrentTime) DOM.fullCurrentTime.textContent = formatTime(curr);
+    if (DOM.fullDuration) DOM.fullDuration.textContent = formatTime(dur);
 
     if (dur > 0) {
         const val = (curr / dur) * 100;
         DOM.seekBar.value = val;
         DOM.seekBar.style.setProperty('--value', val + '%');
+        if (DOM.fullSeekBar) {
+            DOM.fullSeekBar.value = val;
+            DOM.fullSeekBar.style.setProperty('--value', val + '%');
+        }
 
         // Watchdog 1: Near-End Advance (trigger next song ~0.45s before end for gapless feeling)
         if (curr >= dur - 0.45 && !isTransitioning) {
@@ -864,21 +991,37 @@ function updateProgress() {
     lastCurrentTime = curr;
 }
 
-DOM.seekBar.addEventListener('input', (e) => {
+function handleSeek(val) {
     if (!isPlayerReady || !player.getDuration) return;
     const dur = player.getDuration();
-    const val = e.target.value;
     const seekTime = (val / 100) * dur;
     lastCurrentTime = seekTime;
     consecutiveStalls = 0;
     player.seekTo(seekTime, true);
-    DOM.currentTime.textContent = formatTime(seekTime);
+    const formatted = formatTime(seekTime);
+    DOM.currentTime.textContent = formatted;
+    if (DOM.fullCurrentTime) DOM.fullCurrentTime.textContent = formatted;
+    DOM.seekBar.value = val;
     DOM.seekBar.style.setProperty('--value', val + '%');
-});
+    if (DOM.fullSeekBar) {
+        DOM.fullSeekBar.value = val;
+        DOM.fullSeekBar.style.setProperty('--value', val + '%');
+    }
+}
 
-DOM.volumeSlider.addEventListener('input', (e) => {
-    state.volume = parseInt(e.target.value);
+DOM.seekBar.addEventListener('input', (e) => handleSeek(e.target.value));
+if (DOM.fullSeekBar) {
+    DOM.fullSeekBar.addEventListener('input', (e) => handleSeek(e.target.value));
+}
+
+function handleVolume(val) {
+    state.volume = parseInt(val, 10);
+    DOM.volumeSlider.value = state.volume;
     DOM.volumeSlider.style.setProperty('--value', state.volume + '%');
+    if (DOM.fullVolumeSlider) {
+        DOM.fullVolumeSlider.value = state.volume;
+        DOM.fullVolumeSlider.style.setProperty('--value', state.volume + '%');
+    }
     if (isPlayerReady) {
         player.setVolume(state.volume);
         if (state.volume > 0 && player.isMuted()) {
@@ -890,31 +1033,53 @@ DOM.volumeSlider.addEventListener('input', (e) => {
         }
     }
     saveState();
-});
+}
 
-DOM.muteBtn.addEventListener('click', () => {
+DOM.volumeSlider.addEventListener('input', (e) => handleVolume(e.target.value));
+if (DOM.fullVolumeSlider) {
+    DOM.fullVolumeSlider.addEventListener('input', (e) => handleVolume(e.target.value));
+}
+
+function toggleMute() {
     if (!isPlayerReady) return;
 
     if (player.isMuted() || state.volume === 0) {
         player.unMute();
         state.volume = state.volume === 0 ? 100 : state.volume;
         DOM.volumeSlider.value = state.volume;
+        DOM.volumeSlider.style.setProperty('--value', state.volume + '%');
+        if (DOM.fullVolumeSlider) {
+            DOM.fullVolumeSlider.value = state.volume;
+            DOM.fullVolumeSlider.style.setProperty('--value', state.volume + '%');
+        }
         player.setVolume(state.volume);
         updateMuteIcon(false);
     } else {
         player.mute();
         DOM.volumeSlider.value = 0;
+        DOM.volumeSlider.style.setProperty('--value', '0%');
+        if (DOM.fullVolumeSlider) {
+            DOM.fullVolumeSlider.value = 0;
+            DOM.fullVolumeSlider.style.setProperty('--value', '0%');
+        }
         updateMuteIcon(true);
     }
-});
+    saveState();
+}
+
+DOM.muteBtn.addEventListener('click', toggleMute);
+if (DOM.fullMuteBtn) {
+    DOM.fullMuteBtn.addEventListener('click', toggleMute);
+}
 
 function updateMuteIcon(isMuted) {
-    const i = DOM.muteBtn.querySelector('i');
-    if (isMuted) {
-        i.className = 'fa-solid fa-volume-xmark';
-    } else {
-        i.className = 'fa-solid fa-volume-high';
-    }
+    const btns = [DOM.muteBtn, DOM.fullMuteBtn].filter(Boolean);
+    btns.forEach(btn => {
+        const i = btn.querySelector('i');
+        if (i) {
+            i.className = isMuted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+        }
+    });
 }
 
 function formatTime(seconds) {
@@ -922,6 +1087,156 @@ function formatTime(seconds) {
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
+
+// --- Full Music Player Screen ---
+
+function openFullPlayer() {
+    if (DOM.fullPlayerScreen) {
+        DOM.fullPlayerScreen.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        updatePlayerUI();
+    }
+}
+
+function closeFullPlayer() {
+    if (DOM.fullPlayerScreen) {
+        DOM.fullPlayerScreen.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+}
+
+function toggleFullPlayer() {
+    if (DOM.fullPlayerScreen) {
+        if (DOM.fullPlayerScreen.classList.contains('hidden')) {
+            openFullPlayer();
+        } else {
+            closeFullPlayer();
+        }
+    }
+}
+
+// Open full player when clicking bottom now-playing box or expand button
+if (DOM.nowPlayingBox) {
+    DOM.nowPlayingBox.addEventListener('click', () => {
+        if (state.currentIndex >= 0 && state.tracks.length > 0) {
+            openFullPlayer();
+        }
+    });
+}
+
+if (DOM.expandFullPlayerBtn) {
+    DOM.expandFullPlayerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state.currentIndex >= 0 && state.tracks.length > 0) {
+            openFullPlayer();
+        }
+    });
+}
+
+if (DOM.closeFullPlayerBtn) {
+    DOM.closeFullPlayerBtn.addEventListener('click', closeFullPlayer);
+}
+
+if (DOM.fullPlayerBackdrop) {
+    DOM.fullPlayerBackdrop.addEventListener('click', closeFullPlayer);
+}
+
+// Full Player Controls
+if (DOM.fullPlayPauseBtn) DOM.fullPlayPauseBtn.addEventListener('click', togglePlay);
+if (DOM.fullNextBtn) DOM.fullNextBtn.addEventListener('click', () => playNext(true));
+if (DOM.fullPrevBtn) DOM.fullPrevBtn.addEventListener('click', playPrev);
+if (DOM.fullShuffleBtn) DOM.fullShuffleBtn.addEventListener('click', toggleShuffle);
+if (DOM.fullRepeatBtn) DOM.fullRepeatBtn.addEventListener('click', toggleRepeat);
+
+// --- Audio Equalizer (EQ) ---
+
+const EQ_PRESETS = {
+    flat: [0, 0, 0, 0, 0],
+    bass: [8, 6, 2, 0, 1],
+    rock: [5, 3, -1, 4, 6],
+    pop: [-1, 2, 5, 3, -2],
+    electronic: [6, 4, 0, 3, 5],
+    vocal: [-2, 0, 5, 4, -1],
+    jazz: [3, 2, 1, 3, 4]
+};
+
+function openEqModal() {
+    if (DOM.eqModal) {
+        DOM.eqModal.classList.remove('hidden');
+    }
+}
+
+function closeEqModal() {
+    if (DOM.eqModal) {
+        DOM.eqModal.classList.add('hidden');
+    }
+}
+
+function toggleEqModal() {
+    if (DOM.eqModal) {
+        DOM.eqModal.classList.toggle('hidden');
+    }
+}
+
+function applyEqPreset(presetName) {
+    const presetBands = EQ_PRESETS[presetName] || EQ_PRESETS.flat;
+    if (!state.eq) state.eq = { preset: 'flat', bands: [0, 0, 0, 0, 0] };
+    state.eq.preset = presetName;
+    state.eq.bands = [...presetBands];
+
+    DOM.eqPresetBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === presetName);
+    });
+
+    state.eq.bands.forEach((val, idx) => {
+        if (DOM.eqSliders[idx]) {
+            DOM.eqSliders[idx].value = val;
+        }
+        if (DOM.eqDbLabels[idx]) {
+            DOM.eqDbLabels[idx].textContent = (val > 0 ? '+' : '') + val + 'dB';
+        }
+    });
+
+    saveState();
+}
+
+function updateEqSlider(index, val) {
+    const num = parseInt(val, 10);
+    if (!state.eq) state.eq = { preset: 'custom', bands: [0, 0, 0, 0, 0] };
+    state.eq.bands[index] = num;
+    state.eq.preset = 'custom';
+
+    if (DOM.eqDbLabels[index]) {
+        DOM.eqDbLabels[index].textContent = (num > 0 ? '+' : '') + num + 'dB';
+    }
+
+    DOM.eqPresetBtns.forEach(btn => btn.classList.remove('active'));
+    saveState();
+}
+
+if (DOM.openEqBtn) DOM.openEqBtn.addEventListener('click', openEqModal);
+if (DOM.fullOpenEqBtn) DOM.fullOpenEqBtn.addEventListener('click', openEqModal);
+if (DOM.closeEqBtn) DOM.closeEqBtn.addEventListener('click', closeEqModal);
+if (DOM.eqBackdrop) DOM.eqBackdrop.addEventListener('click', closeEqModal);
+
+if (DOM.resetEqBtn) {
+    DOM.resetEqBtn.addEventListener('click', () => applyEqPreset('flat'));
+}
+
+DOM.eqPresetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const preset = btn.dataset.preset;
+        if (preset) applyEqPreset(preset);
+    });
+});
+
+DOM.eqSliders.forEach((slider, idx) => {
+    if (slider) {
+        slider.addEventListener('input', (e) => {
+            updateEqSlider(idx, e.target.value);
+        });
+    }
+});
 
 // --- Event Listeners ---
 
@@ -1024,13 +1339,23 @@ document.addEventListener('keydown', (e) => {
             playPrev();
             break;
         case 'm':
-            DOM.muteBtn.click();
+            toggleMute();
             break;
         case 's':
             toggleShuffle();
             break;
         case 'r':
             toggleRepeat();
+            break;
+        case 'f':
+            toggleFullPlayer();
+            break;
+        case 'e':
+            toggleEqModal();
+            break;
+        case 'escape':
+            closeFullPlayer();
+            closeEqModal();
             break;
     }
 });
@@ -1059,7 +1384,8 @@ function saveState() {
         isShuffle: state.isShuffle,
         repeatMode: state.repeatMode,
         volume: state.volume,
-        theme: state.theme
+        theme: state.theme,
+        eq: state.eq || { preset: 'flat', bands: [0, 0, 0, 0, 0] }
     };
     try {
         localStorage.setItem('playlistPlayerState', JSON.stringify(toSave));
@@ -1089,6 +1415,29 @@ function loadState() {
             // Restore Volume
             DOM.volumeSlider.value = state.volume;
             DOM.volumeSlider.style.setProperty('--value', state.volume + '%');
+            if (DOM.fullVolumeSlider) {
+                DOM.fullVolumeSlider.value = state.volume;
+                DOM.fullVolumeSlider.style.setProperty('--value', state.volume + '%');
+            }
+
+            // Restore EQ Settings
+            if (state.eq) {
+                if (state.eq.preset && state.eq.preset !== 'custom') {
+                    DOM.eqPresetBtns.forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.preset === state.eq.preset);
+                    });
+                }
+                if (Array.isArray(state.eq.bands)) {
+                    state.eq.bands.forEach((val, idx) => {
+                        if (DOM.eqSliders[idx]) {
+                            DOM.eqSliders[idx].value = val;
+                        }
+                        if (DOM.eqDbLabels[idx]) {
+                            DOM.eqDbLabels[idx].textContent = (val > 0 ? '+' : '') + val + 'dB';
+                        }
+                    });
+                }
+            }
 
             // Restore Theme
             document.documentElement.setAttribute('data-theme', state.theme);
