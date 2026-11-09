@@ -11,7 +11,6 @@ A sleek, modern, Spotify/Apple Music-inspired web player for streaming YouTube p
 
 - 🎧 **Modern Music App UI/UX**: Spotify/Apple Music-inspired deep dark interface with glassmorphism, subtle radial glow, and animated soundwave equalizers.
 - 💿 **Full Music Theme Player**: Immersive full-screen player experience featuring a rotating vinyl record, real-time soundwave visualizer, large typography, and full playback controls.
-- 🎚️ **Universal Device-Compatible 5-Band Audio Equalizer**: Pointer-captured vertical touch faders designed specifically for mobile touchscreens (Android/iOS) and desktop. Features real-time acoustic sound enhancement, psychoacoustic sub-bass resonance, dynamic headroom scaling, live SVG frequency curve, animated spectrum analyzer, and instant presets (**Bass Boost 🔊**, **Rock 🎸**, **Pop ✨**, **Electronic ⚡**, **Vocal Boost 🎤**, **Acoustic/Jazz 🎷**, and Master Bypass switch).
 - ⚡ **Ultra-Fast Low-Latency Audio Streaming**: Optimized small-packet network delivery and smart prefetching to ensure instant playback even on slower connections.
 - 🔗 **YouTube Playlist Streaming**: Simply paste any YouTube playlist link or ID to immediately fetch all songs, track counts, channel info, and album art.
 - 🔄 **Live Sync Button**: Easily refresh and sync your playlist to fetch any newly added tracks from YouTube.
@@ -25,30 +24,32 @@ A sleek, modern, Spotify/Apple Music-inspired web player for streaming YouTube p
 
 ## ⌨️ Keyboard Shortcuts
 
-| Shortcut | Action |
-| :--- | :--- |
-| <kbd>Space</kbd> | Play / Pause |
-| <kbd>→</kbd> | Next Track |
-| <kbd>←</kbd> | Previous Track |
-| <kbd>F</kbd> | Toggle Full Music Player Screen |
-| <kbd>E</kbd> | Toggle Audio Equalizer Modal |
-| <kbd>Esc</kbd> | Close / Minimize Full Player & Equalizer |
-| <kbd>M</kbd> | Mute / Unmute |
-| <kbd>S</kbd> | Toggle Shuffle |
-| <kbd>R</kbd> | Toggle Repeat (Off / All / One) |
+| Shortcut         | Action                                   |
+| :--------------- | :--------------------------------------- |
+| <kbd>Space</kbd> | Play / Pause                             |
+| <kbd>→</kbd>     | Next Track                               |
+| <kbd>←</kbd>     | Previous Track                           |
+| <kbd>F</kbd>     | Toggle Full Music Player Screen          |
+| <kbd>Esc</kbd>   | Close / Minimize Full Music Player       |
+| <kbd>M</kbd>     | Mute / Unmute                            |
+| <kbd>S</kbd>     | Toggle Shuffle                           |
+| <kbd>R</kbd>     | Toggle Repeat (Off / All / One)          |
 
 ---
 
 ## 🚀 Getting Started
 
 ### 1. Clone the repository
+
 ```bash
 git clone https://github.com/contactwithcodewithakash/YOUTUBEPLAYLISTPLAYER.COM.git
 cd YOUTUBEPLAYLISTPLAYER.COM
 ```
 
 ### 2. Run Locally
+
 Open `index.html` directly in any modern browser, or serve it using any local static web server:
+
 ```bash
 # Using Python
 python -m http.server 8000
@@ -70,7 +71,8 @@ npx serve
 
 ## 👨‍💻 Developer
 
-**Akash Wawdhane**  
+**Akash Wawdhane**
+
 - GitHub: [@contactwithcodewithakash](https://github.com/contactwithcodewithakash)
 
 ---
