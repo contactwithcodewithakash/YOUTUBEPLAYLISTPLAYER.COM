@@ -3,136 +3,526 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Playlist Music Player</title>
-    <!-- Google Fonts -->
+    <title>Waveify — Modern YouTube Playlist Player</title>
+    <meta name="description" content="Stream and organize your favorite YouTube playlists like a modern music app. Featuring background playback, queue, favorites, sleep timer, and dynamic visualizer.">
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎵</text></svg>">
+    <!-- Google Fonts: Inter & Plus Jakarta Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- CSS -->
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Hidden YouTube IFrame Container -->
     <div id="youtube-player" style="position: fixed; bottom: 0; right: 0; width: 200px; height: 200px; opacity: 0.001; pointer-events: none; z-index: -999;"></div>
 
-    <div class="app-container">
-        <!-- Header -->
-        <header class="app-header">
-            <div class="logo">
-                <i class="fa-solid fa-music accent-color"></i>
-                <div class="logo-text">
-                    <h1>Playlist Music Player</h1>
-                    <span class="developer-credit">&copy; Develop By Akash Wawdhane</span>
+    <!-- Ambient Glow Backdrop -->
+    <div class="ambient-glow" id="ambient-glow"></div>
+
+    <div class="app-layout">
+        <!-- Sidebar Navigation (Desktop) -->
+        <aside class="app-sidebar" id="app-sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo">
+                    <span class="logo-icon"><i class="fa-solid fa-compact-disc fa-spin-pulse" style="--fa-animation-duration: 6s;"></i></span>
+                    <div class="brand-text">
+                        <span class="brand-name">Waveify</span>
+                        <span class="brand-tag">MUSIC PLAYER</span>
+                    </div>
                 </div>
             </div>
-            <button id="theme-toggle" class="icon-btn" aria-label="Toggle Theme">
-                <i class="fa-solid fa-sun"></i>
-            </button>
-        </header>
 
-        <!-- Main Content -->
-        <main class="app-main">
-            <!-- Left Panel (Input & Playlist Info) -->
-            <section class="left-panel">
-                <!-- Input Section -->
-                <div class="input-section">
-                    <form id="load-playlist-form">
-                        <div class="input-group">
-                            <i class="fa-brands fa-youtube"></i>
-                            <input type="text" id="playlist-url" placeholder="Paste YouTube Playlist URL Here" required>
-                        </div>
-                        <button type="submit" class="primary-btn">Load Playlist</button>
-                    </form>
-                    <div id="error-message" class="error-message hidden"></div>
+            <!-- Navigation Links -->
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">MENU</div>
+                <button class="nav-item active" data-view="playlist" id="nav-playlist">
+                    <i class="fa-solid fa-music"></i>
+                    <span>Now Playing</span>
+                </button>
+                <button class="nav-item" data-view="discover" id="nav-discover">
+                    <i class="fa-solid fa-compass"></i>
+                    <span>Discover Hub</span>
+                    <span class="nav-badge">New</span>
+                </button>
+                <button class="nav-item" data-view="favorites" id="nav-favorites">
+                    <i class="fa-solid fa-heart"></i>
+                    <span>Liked Songs</span>
+                    <span class="nav-counter" id="fav-counter">0</span>
+                </button>
+                <button class="nav-item" data-view="queue" id="nav-queue">
+                    <i class="fa-solid fa-list-ol"></i>
+                    <span>Play Queue</span>
+                </button>
+
+                <div class="nav-section-title mt-4">YOUR LIBRARY</div>
+                <div class="sidebar-library-list" id="sidebar-library-list">
+                    <!-- Saved Playlists injected dynamically -->
+                </div>
+                <button class="add-library-btn" id="open-add-playlist-btn">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add New Playlist</span>
+                </button>
+            </nav>
+
+            <!-- Sidebar Footer (Developer & Quick Info) -->
+            <div class="sidebar-footer">
+                <div class="creator-badge">
+                    <div class="creator-avatar">
+                        <i class="fa-solid fa-code"></i>
+                    </div>
+                    <div class="creator-meta">
+                        <span class="creator-label">DEVELOPED BY</span>
+                        <span class="creator-name">Akash Wawdhane</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Wrapper -->
+        <div class="app-content-area">
+            <!-- App Header -->
+            <header class="app-header">
+                <!-- Mobile Menu / Brand -->
+                <div class="header-left">
+                    <button class="icon-btn mobile-only-btn" id="mobile-menu-btn" aria-label="Toggle Menu">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="header-url-bar">
+                        <form id="load-playlist-form" class="url-input-form">
+                            <i class="fa-brands fa-youtube url-icon"></i>
+                            <input type="text" id="playlist-url" placeholder="Paste YouTube Playlist URL (or hit Enter)..." autocomplete="off" spellcheck="false" required>
+                            <button type="submit" class="url-submit-btn" id="load-btn" title="Load Playlist">
+                                <span>Load</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
-                <!-- Playlist Info -->
-                <div id="playlist-info" class="playlist-info hidden">
-                    <div class="playlist-thumbnail-container">
-                        <img id="playlist-thumbnail" src="" alt="Playlist Thumbnail">
-                        <div class="play-overlay">
-                            <button id="play-all-btn" class="play-circle-btn">
-                                <i class="fa-solid fa-play"></i>
+                <!-- Header Actions -->
+                <div class="header-right">
+                    <button id="sleep-timer-btn" class="header-action-btn" title="Sleep Timer" aria-label="Sleep Timer">
+                        <i class="fa-solid fa-moon"></i>
+                        <span class="sleep-timer-label" id="sleep-timer-label">Timer</span>
+                    </button>
+                    <button id="api-settings-btn" class="header-action-btn" title="API Key Settings" aria-label="API Settings">
+                        <i class="fa-solid fa-key"></i>
+                        <span class="btn-text-desktop">API Key</span>
+                    </button>
+                    <button id="shortcuts-btn" class="header-action-btn icon-only" title="Keyboard Shortcuts (?)" aria-label="Keyboard Shortcuts">
+                        <i class="fa-solid fa-keyboard"></i>
+                    </button>
+                    <button id="theme-toggle" class="header-action-btn icon-only" title="Toggle Theme" aria-label="Toggle Theme">
+                        <i class="fa-solid fa-sun"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Error Banner -->
+            <div id="error-message" class="error-banner hidden">
+                <i class="fa-solid fa-circle-exclamation error-icon"></i>
+                <div class="error-text" id="error-text">An error occurred</div>
+                <button class="error-close" id="error-close-btn">&times;</button>
+            </div>
+
+            <!-- View 1: Main Playlist View -->
+            <main class="view-panel active-view" id="view-playlist">
+                <!-- Hero Playlist Header Banner -->
+                <section class="playlist-hero" id="playlist-hero">
+                    <div class="hero-cover-wrapper">
+                        <img id="playlist-thumbnail" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80" alt="Playlist Cover" class="hero-cover">
+                        <button class="hero-play-floating" id="play-all-btn" title="Play All">
+                            <i class="fa-solid fa-play"></i>
+                        </button>
+                    </div>
+                    <div class="hero-info">
+                        <div class="hero-badge-row">
+                            <span class="badge-pill" id="hero-badge">PUBLIC PLAYLIST</span>
+                            <span class="badge-pill accent-pill" id="hero-status">READY TO STREAM</span>
+                        </div>
+                        <h1 class="hero-title" id="playlist-title">Select or Load a Playlist</h1>
+                        <p class="hero-desc" id="playlist-desc">Explore music, build custom queues, and stream your favorite YouTube tracks seamlessly.</p>
+                        <div class="hero-meta">
+                            <span class="hero-meta-item" id="playlist-owner">
+                                <i class="fa-solid fa-user-circle"></i> Waveify Curator
+                            </span>
+                            <span class="dot-separator">•</span>
+                            <span class="hero-meta-item" id="playlist-count">0 tracks</span>
+                            <span class="dot-separator">•</span>
+                            <span class="hero-meta-item" id="playlist-duration">-- min</span>
+                        </div>
+                        <div class="hero-actions">
+                            <button class="action-btn primary" id="hero-play-btn">
+                                <i class="fa-solid fa-play"></i> Play All
+                            </button>
+                            <button class="action-btn secondary" id="hero-shuffle-btn">
+                                <i class="fa-solid fa-shuffle"></i> Shuffle
+                            </button>
+                            <button class="action-btn icon-circle" id="save-playlist-btn" title="Save to Library">
+                                <i class="fa-regular fa-bookmark"></i>
+                            </button>
+                            <button class="action-btn icon-circle" id="sync-playlist-btn" title="Sync / Refresh Tracks">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                            <button class="action-btn icon-circle" id="share-playlist-btn" title="Share / Copy Link">
+                                <i class="fa-solid fa-share-nodes"></i>
                             </button>
                         </div>
                     </div>
-                    <div class="playlist-details">
-                        <h2 id="playlist-title">Playlist Title</h2>
-                        <p class="playlist-meta">
-                            <span id="playlist-owner">Owner Name</span>
-                            <span class="dot-separator">•</span>
-                            <span id="playlist-count">0 songs</span>
+                </section>
+
+                <!-- Track Search & Filters -->
+                <div class="tracklist-toolbar">
+                    <div class="toolbar-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="track-search-input" placeholder="Search track in this playlist..." autocomplete="off">
+                        <button class="clear-search-btn hidden" id="clear-search-btn">&times;</button>
+                    </div>
+                    <div class="toolbar-stats" id="toolbar-stats">
+                        Showing all tracks
+                    </div>
+                </div>
+
+                <!-- Track List Table -->
+                <div class="tracklist-container">
+                    <div class="tracklist-header-row">
+                        <span class="th-num">#</span>
+                        <span class="th-title">TITLE</span>
+                        <span class="th-channel">ARTIST / CHANNEL</span>
+                        <span class="th-actions">ACTIONS</span>
+                    </div>
+                    <div id="playlist-tracks" class="tracklist-body">
+                        <!-- Dynamic Tracks Rendered Here -->
+                        <div class="empty-state">
+                            <div class="empty-illustration">
+                                <i class="fa-solid fa-headphones"></i>
+                            </div>
+                            <h3>No Playlist Loaded Yet</h3>
+                            <p>Paste any YouTube playlist link in the top bar or explore curated vibes in the Discover Hub.</p>
+                            <button class="primary-btn mt-3" id="empty-discover-btn">
+                                <i class="fa-solid fa-compass"></i> Explore Curated Playlists
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- View 2: Discover Hub (Curated Playlists) -->
+            <section class="view-panel" id="view-discover">
+                <div class="view-header">
+                    <div>
+                        <h2 class="view-title">Discover Curated Playlists</h2>
+                        <p class="view-subtitle">Instant high-quality playlists ready to stream with zero setup.</p>
+                    </div>
+                </div>
+                <div class="curated-grid" id="curated-grid">
+                    <!-- Curated playlist cards injected dynamically -->
+                </div>
+            </section>
+
+            <!-- View 3: Liked Songs (Favorites) -->
+            <section class="view-panel" id="view-favorites">
+                <div class="favorites-hero">
+                    <div class="fav-hero-art">
+                        <i class="fa-solid fa-heart"></i>
+                    </div>
+                    <div class="fav-hero-details">
+                        <span class="badge-pill">PLAYLIST</span>
+                        <h1 class="hero-title">Liked Songs</h1>
+                        <p class="hero-meta">
+                            <span id="fav-count-meta">0 songs</span> • Saved locally on this browser
                         </p>
-                        <button id="sync-playlist-btn" class="sync-btn" title="Fetch latest songs from YouTube">
-                            <i class="fa-solid fa-arrows-rotate"></i> Sync Playlist
-                        </button>
+                        <div class="hero-actions">
+                            <button class="action-btn primary" id="play-favorites-btn">
+                                <i class="fa-solid fa-play"></i> Play Liked Songs
+                            </button>
+                            <button class="action-btn secondary" id="shuffle-favorites-btn">
+                                <i class="fa-solid fa-shuffle"></i> Shuffle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tracklist-container mt-4">
+                    <div id="favorites-tracks" class="tracklist-body">
+                        <!-- Liked songs injected dynamically -->
                     </div>
                 </div>
             </section>
 
-            <!-- Right Panel (Song List) -->
-            <section class="right-panel">
-                <div class="list-header">
-                    <h3>Tracks</h3>
-                </div>
-                <div id="playlist-tracks" class="playlist-tracks">
-                    <!-- Tracks will be injected here -->
-                    <div class="empty-state">
-                        <i class="fa-solid fa-compact-disc empty-icon"></i>
-                        <p>No playlist loaded. Paste a URL to start listening.</p>
+            <!-- View 4: Play Queue -->
+            <section class="view-panel" id="view-queue">
+                <div class="view-header">
+                    <div>
+                        <h2 class="view-title">Play Queue</h2>
+                        <p class="view-subtitle">Manage what plays next. Drag or click to jump.</p>
                     </div>
-                </div>
-            </section>
-        </main>
-
-        <!-- Bottom Player Bar -->
-        <footer class="app-player">
-            <div class="player-content">
-                <!-- Left: Now Playing -->
-                <div class="now-playing">
-                    <img id="now-playing-thumb" src="https://via.placeholder.com/60" alt="Song Thumbnail" class="hidden">
-                    <div class="now-playing-info hidden">
-                        <h4 id="now-playing-title">Song Title</h4>
-                        <p id="now-playing-playlist">Playlist Name</p>
-                    </div>
-                </div>
-
-                <!-- Center: Controls & Progress -->
-                <div class="player-center">
-                    <div class="player-controls">
-                        <button id="shuffle-btn" class="control-btn" title="Shuffle (S)">
-                            <i class="fa-solid fa-shuffle"></i>
-                        </button>
-                        <button id="prev-btn" class="control-btn" title="Previous (Left Arrow)">
-                            <i class="fa-solid fa-backward-step"></i>
-                        </button>
-                        <button id="play-pause-btn" class="control-btn play-pause" title="Play/Pause (Space)">
-                            <i class="fa-solid fa-circle-play"></i>
-                        </button>
-                        <button id="next-btn" class="control-btn" title="Next (Right Arrow)">
-                            <i class="fa-solid fa-forward-step"></i>
-                        </button>
-                        <button id="repeat-btn" class="control-btn" title="Repeat (R)">
-                            <i class="fa-solid fa-repeat"></i>
-                        </button>
-                    </div>
-                    <div class="progress-container">
-                        <span id="current-time">0:00</span>
-                        <input type="range" id="seek-bar" value="0" min="0" max="100" step="0.1">
-                        <span id="duration">0:00</span>
-                    </div>
-                </div>
-
-                <!-- Right: Volume -->
-                <div class="volume-controls">
-                    <button id="mute-btn" class="control-btn" title="Mute (M)">
-                        <i class="fa-solid fa-volume-high"></i>
+                    <button class="action-btn secondary" id="clear-queue-btn">
+                        <i class="fa-solid fa-trash-can"></i> Clear Queue
                     </button>
-                    <input type="range" id="volume-slider" value="100" min="0" max="100">
+                </div>
+                <div class="queue-section">
+                    <h3 class="queue-heading">Now Playing</h3>
+                    <div id="queue-now-playing" class="tracklist-body queue-item-single">
+                        <!-- Active track card -->
+                    </div>
+
+                    <h3 class="queue-heading mt-4">Next in Queue</h3>
+                    <div id="queue-next-tracks" class="tracklist-body">
+                        <!-- Up next tracks -->
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Bottom Player Bar -->
+    <footer class="app-player" id="app-player">
+        <div class="player-content">
+            <!-- Left: Now Playing Info -->
+            <div class="player-left">
+                <div class="now-playing-cover" id="open-cinema-btn" title="Click to expand fullscreen player">
+                    <img id="now-playing-thumb" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120" alt="Track Thumbnail">
+                    <div class="cover-hover-overlay">
+                        <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+                    </div>
+                </div>
+                <div class="now-playing-meta">
+                    <div class="now-playing-title-wrap">
+                        <span id="now-playing-title" class="track-title-text">Select a track to play</span>
+                    </div>
+                    <span id="now-playing-playlist" class="track-artist-text">Waveify Music Player</span>
+                </div>
+                <button id="like-current-btn" class="player-icon-btn heart-btn" title="Add to Liked Songs (L)">
+                    <i class="fa-regular fa-heart"></i>
+                </button>
+                <!-- Mini Soundwave animation when playing -->
+                <div class="equalizer-bars" id="mini-equalizer">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
                 </div>
             </div>
-        </footer>
+
+            <!-- Center: Playback Controls & Progress Bar -->
+            <div class="player-center">
+                <div class="player-controls">
+                    <button id="shuffle-btn" class="control-btn" title="Shuffle (S)">
+                        <i class="fa-solid fa-shuffle"></i>
+                    </button>
+                    <button id="prev-btn" class="control-btn" title="Previous (Left Arrow)">
+                        <i class="fa-solid fa-backward-step"></i>
+                    </button>
+                    <button id="play-pause-btn" class="control-btn play-pause-circle" title="Play/Pause (Space)">
+                        <i class="fa-solid fa-play"></i>
+                    </button>
+                    <button id="next-btn" class="control-btn" title="Next (Right Arrow)">
+                        <i class="fa-solid fa-forward-step"></i>
+                    </button>
+                    <button id="repeat-btn" class="control-btn" title="Repeat (R)">
+                        <i class="fa-solid fa-repeat"></i>
+                    </button>
+                </div>
+                <div class="progress-bar-row">
+                    <span id="current-time" class="time-label">0:00</span>
+                    <div class="seek-bar-wrapper">
+                        <input type="range" id="seek-bar" value="0" min="0" max="100" step="0.1" aria-label="Seek track position">
+                        <div class="seek-tooltip" id="seek-tooltip">0:00</div>
+                    </div>
+                    <span id="duration" class="time-label">0:00</span>
+                </div>
+            </div>
+
+            <!-- Right: Secondary Controls (Speed, Queue, Volume, Fullscreen) -->
+            <div class="player-right">
+                <button id="speed-btn" class="player-pill-btn" title="Playback Speed">
+                    <span id="speed-label">1x</span>
+                </button>
+                <button id="player-queue-btn" class="player-icon-btn" title="Play Queue (Q)">
+                    <i class="fa-solid fa-list-ol"></i>
+                </button>
+                <button id="cinema-toggle-btn" class="player-icon-btn" title="Fullscreen Visualizer (F)">
+                    <i class="fa-solid fa-expand"></i>
+                </button>
+                <!-- Volume Slider -->
+                <div class="volume-container">
+                    <button id="mute-btn" class="player-icon-btn" title="Mute (M)">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </button>
+                    <div class="volume-slider-wrapper">
+                        <input type="range" id="volume-slider" value="100" min="0" max="100" aria-label="Volume">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Fullscreen Cinema / Visualizer Overlay -->
+    <div class="cinema-overlay" id="cinema-overlay">
+        <div class="cinema-backdrop" id="cinema-backdrop"></div>
+        <button class="cinema-close-btn" id="cinema-close-btn" title="Exit Cinema (Esc)">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+
+        <div class="cinema-container">
+            <div class="cinema-vinyl-wrap">
+                <div class="vinyl-disc" id="cinema-vinyl">
+                    <img id="cinema-thumb" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600" alt="Album Cover">
+                    <div class="vinyl-center-hole"></div>
+                </div>
+                <!-- Dynamic Waveform visualizer simulation -->
+                <div class="cinema-visualizer" id="cinema-visualizer">
+                    <span class="v-bar"></span><span class="v-bar"></span><span class="v-bar"></span>
+                    <span class="v-bar"></span><span class="v-bar"></span><span class="v-bar"></span>
+                    <span class="v-bar"></span><span class="v-bar"></span><span class="v-bar"></span>
+                    <span class="v-bar"></span><span class="v-bar"></span><span class="v-bar"></span>
+                    <span class="v-bar"></span><span class="v-bar"></span><span class="v-bar"></span>
+                </div>
+            </div>
+
+            <div class="cinema-track-details">
+                <div class="cinema-meta">
+                    <h2 id="cinema-title" class="cinema-title">Song Title</h2>
+                    <p id="cinema-artist" class="cinema-artist">Artist / Channel Name</p>
+                </div>
+
+                <div class="cinema-progress-area">
+                    <div class="cinema-time-row">
+                        <span id="cinema-current-time">0:00</span>
+                        <span id="cinema-duration">0:00</span>
+                    </div>
+                    <input type="range" id="cinema-seek-bar" value="0" min="0" max="100" step="0.1">
+                </div>
+
+                <div class="cinema-controls">
+                    <button id="cinema-shuffle-btn" class="cinema-btn"><i class="fa-solid fa-shuffle"></i></button>
+                    <button id="cinema-prev-btn" class="cinema-btn"><i class="fa-solid fa-backward-step"></i></button>
+                    <button id="cinema-play-pause-btn" class="cinema-btn cinema-play-circle"><i class="fa-solid fa-play"></i></button>
+                    <button id="cinema-next-btn" class="cinema-btn"><i class="fa-solid fa-forward-step"></i></button>
+                    <button id="cinema-repeat-btn" class="cinema-btn"><i class="fa-solid fa-repeat"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-nav-bar" id="mobile-nav-bar">
+        <button class="mobile-nav-item active" data-view="playlist">
+            <i class="fa-solid fa-music"></i>
+            <span>Player</span>
+        </button>
+        <button class="mobile-nav-item" data-view="discover">
+            <i class="fa-solid fa-compass"></i>
+            <span>Discover</span>
+        </button>
+        <button class="mobile-nav-item" data-view="favorites">
+            <i class="fa-solid fa-heart"></i>
+            <span>Liked</span>
+        </button>
+        <button class="mobile-nav-item" data-view="queue">
+            <i class="fa-solid fa-list-ol"></i>
+            <span>Queue</span>
+        </button>
+    </nav>
+
+    <!-- Modal: API Key Settings -->
+    <div class="modal-backdrop hidden" id="api-modal">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-key accent-color"></i> YouTube API Settings</h3>
+                <button class="modal-close" id="close-api-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Provide your own free Google Cloud YouTube Data API v3 key to bypass YouTube quota limits or domain restrictions.</p>
+                <div class="input-field-group">
+                    <label for="custom-api-key-input">YouTube Data API v3 Key:</label>
+                    <input type="text" id="custom-api-key-input" placeholder="AIzaSy..." spellcheck="false">
+                </div>
+                <div class="api-status-box" id="api-status-box">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span id="api-status-text">Using active configured API key</span>
+                </div>
+                <div class="api-help-guide">
+                    <strong>How to get your own free API key (in 1 min):</strong>
+                    <ol>
+                        <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>.</li>
+                        <li>Create a project & enable <strong>YouTube Data API v3</strong>.</li>
+                        <li>Navigate to <strong>Credentials</strong> &gt; <strong>Create Credentials</strong> &gt; <strong>API Key</strong>.</li>
+                        <li>(Optional) In Key Restrictions &gt; Website Restrictions, add your deployed domain or leave unrestricted for testing.</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary" id="reset-api-key-btn">Reset Default</button>
+                <button class="modal-btn primary" id="save-api-key-btn">Save Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Sleep Timer -->
+    <div class="modal-backdrop hidden" id="sleep-modal">
+        <div class="modal-window timer-modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-moon accent-color"></i> Sleep Timer</h3>
+                <button class="modal-close" id="close-sleep-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Stop audio automatically after a selected duration:</p>
+                <div class="timer-options-grid">
+                    <button class="timer-option-btn" data-minutes="15">15 min</button>
+                    <button class="timer-option-btn" data-minutes="30">30 min</button>
+                    <button class="timer-option-btn" data-minutes="45">45 min</button>
+                    <button class="timer-option-btn" data-minutes="60">1 Hour</button>
+                    <button class="timer-option-btn" data-minutes="end-track">End of Track</button>
+                    <button class="timer-option-btn cancel-timer-btn" data-minutes="0">Cancel Timer</button>
+                </div>
+                <div class="timer-active-info hidden" id="timer-active-info">
+                    <i class="fa-solid fa-clock"></i>
+                    <span>Playback stops in <strong id="timer-countdown">--:--</strong></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Keyboard Shortcuts -->
+    <div class="modal-backdrop hidden" id="shortcuts-modal">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-keyboard accent-color"></i> Keyboard Shortcuts</h3>
+                <button class="modal-close" id="close-shortcuts-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcuts-grid">
+                    <div class="shortcut-row"><kbd>Space</kbd><span>Play / Pause</span></div>
+                    <div class="shortcut-row"><kbd>→</kbd><span>Next Track</span></div>
+                    <div class="shortcut-row"><kbd>←</kbd><span>Previous Track</span></div>
+                    <div class="shortcut-row"><kbd>↑</kbd><span>Volume Up (+5%)</span></div>
+                    <div class="shortcut-row"><kbd>↓</kbd><span>Volume Down (-5%)</span></div>
+                    <div class="shortcut-row"><kbd>M</kbd><span>Mute / Unmute</span></div>
+                    <div class="shortcut-row"><kbd>S</kbd><span>Toggle Shuffle</span></div>
+                    <div class="shortcut-row"><kbd>R</kbd><span>Toggle Repeat</span></div>
+                    <div class="shortcut-row"><kbd>L</kbd><span>Like / Favorite Track</span></div>
+                    <div class="shortcut-row"><kbd>F</kbd><span>Toggle Fullscreen Cinema</span></div>
+                    <div class="shortcut-row"><kbd>Q</kbd><span>View Play Queue</span></div>
+                    <div class="shortcut-row"><kbd>?</kbd><span>Open This Help Guide</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Context Menu for Track items -->
+    <div class="track-context-menu hidden" id="track-context-menu">
+        <button class="context-item" id="ctx-play-now"><i class="fa-solid fa-play"></i> Play Now</button>
+        <button class="context-item" id="ctx-play-next"><i class="fa-solid fa-arrow-turn-down"></i> Play Next</button>
+        <button class="context-item" id="ctx-add-queue"><i class="fa-solid fa-list-plus"></i> Add to Queue</button>
+        <button class="context-item" id="ctx-copy-link"><i class="fa-solid fa-link"></i> Copy Video Link</button>
+        <button class="context-item" id="ctx-open-yt"><i class="fa-brands fa-youtube"></i> Open on YouTube</button>
     </div>
 
     <!-- YouTube IFrame API -->
