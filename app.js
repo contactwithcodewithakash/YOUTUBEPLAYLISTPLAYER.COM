@@ -94,6 +94,7 @@ function onYouTubeIframeAPIReady() {
         ? window.location.origin
         : undefined;
 
+    // Optimized player parameters for lowest latency & small packet streaming
     const playerVars = {
         'playsinline': 1,
         'autoplay': 1,
@@ -101,7 +102,10 @@ function onYouTubeIframeAPIReady() {
         'disablekb': 1,
         'fs': 0,
         'rel': 0,
-        'enablejsapi': 1
+        'enablejsapi': 1,
+        'iv_load_policy': 3, // Disable annotations/cards (saves network roundtrips)
+        'modestbranding': 1,
+        'autohide': 1
     };
 
     if (origin) {
@@ -123,7 +127,13 @@ function onYouTubeIframeAPIReady() {
 
 function onPlayerReady(event) {
     isPlayerReady = true;
-    player.setVolume(state.volume);
+    try {
+        player.setVolume(state.volume);
+        // Request small quality (144p/audio-optimized) for instant packet delivery
+        if (player.setPlaybackQuality) {
+            player.setPlaybackQuality('small');
+        }
+    } catch (e) {}
 
     // Setup initial lock screen / mediaSession handlers
     setupMediaSessionHandlers();
@@ -179,6 +189,13 @@ function onPlayerStateChange(event) {
             }
         }
     } else if (event.data === YT.PlayerState.BUFFERING) {
+        // Enforce smallest quality so buffer fills fast with small packets
+        try {
+            if (player && player.setPlaybackQuality) {
+                player.setPlaybackQuality('small');
+            }
+        } catch (e) {}
+
         // Check if buffering at the end of track
         const curr = (player && player.getCurrentTime) ? (player.getCurrentTime() || 0) : 0;
         const dur = (player && player.getDuration) ? (player.getDuration() || 0) : 0;
@@ -506,19 +523,35 @@ function playSong(index) {
     // Save state
     saveState();
 
-    // 2. Load and play in YouTube player
+    // 2. Load and play in YouTube player (Request smallest packet size for fast delivery)
     if (isPlayerReady && player) {
         try {
+            if (player.setPlaybackQuality) {
+                player.setPlaybackQuality('small');
+            }
             player.loadVideoById({
                 videoId: track.videoId,
-                startSeconds: 0
+                startSeconds: 0,
+                suggestedQuality: 'small'
             });
         } catch (e) {
             console.warn("loadVideoById fallback:", e);
-            player.loadVideoById(track.videoId);
+            try {
+                player.loadVideoById(track.videoId, 0, 'small');
+            } catch (err) {
+                player.loadVideoById(track.videoId);
+            }
         }
 
-        // Mobile autoplay watchdog: ensure playback begins if browser hesitates
+        // Fast start: force play immediately
+        try {
+            player.playVideo();
+        } catch (e) {}
+
+        // Preload next track thumbnail for instant UI transition
+        preloadNextTrack(index);
+
+        // Fast autoplay watchdog: ensures playback starts within 350ms
         clearTimeout(autoplayRetryTimeout);
         autoplayRetryTimeout = setTimeout(() => {
             if (isPlayerReady && state.isPlaying) {
@@ -530,7 +563,17 @@ function playSong(index) {
                     }
                 } catch (e) {}
             }
-        }, 800);
+        }, 350);
+    }
+}
+
+function preloadNextTrack(currentIndex) {
+    if (!state.tracks || state.tracks.length === 0) return;
+    const nextIdx = (currentIndex + 1) % state.tracks.length;
+    const nextTrack = state.tracks[nextIdx];
+    if (nextTrack && nextTrack.thumbnail) {
+        const img = new Image();
+        img.src = nextTrack.thumbnail;
     }
 }
 
