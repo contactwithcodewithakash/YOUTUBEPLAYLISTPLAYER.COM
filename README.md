@@ -10,11 +10,14 @@ A sleek, modern, Spotify/Apple Music-inspired web player for streaming YouTube p
 ## ✨ Features
 
 - 🎧 **Modern Music App UI/UX**: Spotify/Apple Music-inspired deep dark interface with glassmorphism, subtle radial glow, and animated soundwave equalizers.
-- 🔗 **YouTube Playlist Streaming**: Simply paste any YouTube playlist link to immediately fetch all songs, track counts, channel info, and album art.
+- 💿 **Full Music Theme Player**: Immersive full-screen player experience featuring a rotating vinyl record, real-time soundwave visualizer, large typography, and full playback controls.
+- 🎚️ **5-Band Audio Equalizer & Sound Enhancer**: Fine-tune sound quality with vertical sliders (60Hz to 14kHz) or choose from instant presets: **Bass Boost 🔊**, **Rock 🎸**, **Pop ✨**, **Electronic ⚡**, **Vocal Boost 🎤**, **Acoustic/Jazz 🎷**, or **Flat**.
+- ⚡ **Ultra-Fast Low-Latency Audio Streaming**: Optimized small-packet network delivery and smart prefetching to ensure instant playback even on slower connections.
+- 🔗 **YouTube Playlist Streaming**: Simply paste any YouTube playlist link or ID to immediately fetch all songs, track counts, channel info, and album art.
 - 🔄 **Live Sync Button**: Easily refresh and sync your playlist to fetch any newly added tracks from YouTube.
 - 📱 **Mobile & Background Playback**: Engineered with background audio loops and stall-recovery watchdogs to keep music playing seamlessly even when the screen is locked or browsing other tabs.
 - 📲 **MediaSession API Support**: Control tracks (Play, Pause, Next, Previous, Seeking) directly from your lock screen, notification shade, or Bluetooth headset.
-- 🔀 **Shuffle & Repeat Modes**: Shuffle songs with Fisher-Yates randomization, Repeat All, or Repeat One.
+- 🔀 **Shuffle & Repeat Modes**: Shuffle songs with Fisher-Yates randomization, Repeat All, or Repeat One (with Spotify-style badge).
 - 🎨 **Dark / Light Theme Toggle**: Seamless toggle between sleek deep dark mode and crisp light mode.
 - ⌨️ **Desktop Keyboard Shortcuts**: Full control via keyboard for power users.
 
@@ -27,6 +30,9 @@ A sleek, modern, Spotify/Apple Music-inspired web player for streaming YouTube p
 | <kbd>Space</kbd> | Play / Pause |
 | <kbd>→</kbd> | Next Track |
 | <kbd>←</kbd> | Previous Track |
+| <kbd>F</kbd> | Toggle Full Music Player Screen |
+| <kbd>E</kbd> | Toggle Audio Equalizer Modal |
+| <kbd>Esc</kbd> | Close / Minimize Full Player & Equalizer |
 | <kbd>M</kbd> | Mute / Unmute |
 | <kbd>S</kbd> | Toggle Shuffle |
 | <kbd>R</kbd> | Toggle Repeat (Off / All / One) |
